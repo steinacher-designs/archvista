@@ -1,21 +1,24 @@
 {
   "name": "archvista",
   "version": "1.0.0",
-  "description": "",
+  "description": "ARCHVISTA – 3D-DXF zu interaktiver Architektur-Website",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "dev": "vite",
+    "build:runtime": "vite build -c vite.runtime.config.ts",
+    "build": "npm run build:runtime && tsc --noEmit -p . && vite build",
+    "assets": "node scripts/fetch-assets.mjs",
+    "tauri": "tauri"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@react-three/fiber": "^9.8.2",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.8.4",
-    "@tauri-apps/plugin-fs": "^2.7.1",
     "@tauri-apps/plugin-http": "^2.8.3",
-    "@tauri-apps/plugin-shell": "^2.6.0",
+    "@tauri-apps/plugin-opener": "^2.7.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "three": "^0.187.0",

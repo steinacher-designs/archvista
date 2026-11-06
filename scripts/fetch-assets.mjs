@@ -40,6 +40,12 @@ export const HDRIS = {
   evening: "belfast_sunset_puresky",
   studio: "studio_small_09",
 };
+/** Photographic surroundings (ground-projected panoramas) per environment. */
+export const PHOTO_ENVS = {
+  urban: "canary_wharf",
+  forest: "alps_field",
+  coastal: "spiaggia_di_mondello",
+};
 export const MODELS = {
   shrub_a: { id: "shrub_04", ratio: 0.5 },
   shrub_b: { id: "shrub_01", ratio: 0.25 },
@@ -114,6 +120,25 @@ export const MODEL_LOD = {
   rocks: { keep: 1, wood: 0.25 }, tree_a: { keep: 0.11, wood: 0.05 }, tree_b: { keep: 0.07, wood: 0.05 },
 };
 
+async function photoEnvs() {
+  await mkdir(path.join(OUT, "hdri"), { recursive: true });
+  for (const [env, id] of Object.entries(PHOTO_ENVS)) {
+    const hdr = path.join(OUT, "hdri", `env_${env}.hdr`), bg = path.join(OUT, "hdri", `env_${env}_bg.webp`);
+    if (existsSync(hdr) && existsSync(bg)) {
+      const th = path.join(OUT, "hdri", `env_${env}_thumb.webp`);
+      if (!existsSync(th)) await sharp(bg).resize(480, 240).extract({ left: 0, top: 60, width: 480, height: 120 }).webp({ quality: 80 }).toFile(th);
+      console.log("skip", env); continue;
+    }
+    const files = await api(`files/${id}`);
+    await record("hdri_env_" + env, id, "hdri");
+    await writeFile(hdr, await dl(files.hdri["1k"].hdr.url)); // lighting
+    const jpg = await dl(files.tonemapped.url);                 // visible panorama (photographer's tone mapping)
+    await sharp(jpg, { limitInputPixels: false }).resize(4096, 2048).webp({ quality: 84 }).toFile(bg);
+    await sharp(bg).resize(480, 240).extract({ left: 0, top: 60, width: 480, height: 120 }).webp({ quality: 80 }).toFile(path.join(OUT, "hdri", `env_${env}_thumb.webp`));
+    console.log("photo env", env, id);
+  }
+}
+
 async function models() {
   await mkdir(path.join(OUT, "models"), { recursive: true });
   const raw = path.resolve(".asset-cache/raw");
@@ -164,13 +189,14 @@ async function models() {
 const what = process.argv[2] ?? "all";
 if (what === "all" || what === "textures") await textures();
 if (what === "all" || what === "hdri") await hdris();
+if (what === "all" || what === "photo") await photoEnvs();
 if (what === "all" || what === "models") await models();
 await writeFile(path.join(OUT, "LICENSES.json"), JSON.stringify(licences, null, 2));
 // manifest consumed by the viewer (texture real-world sizes in metres)
 const manifest = { textures: {}, hdri: {}, models: {} };
 for (const [k, v] of Object.entries(licences)) {
   if (v.kind === "texture") manifest.textures[k] = { size: Math.round(((v.dimensions_mm?.[0] ?? 2000) / 1000) * 1000) / 1000 };
-  else if (v.kind === "hdri") manifest.hdri[k.slice(5)] = {};
+  else if (v.kind === "hdri") manifest.hdri[k.slice(5)] = k.startsWith("hdri_env_") ? { photo: true, cameraHeight: 1.7 } : {};
   else manifest.models[k.slice(6)] = {};
 }
 await writeFile(path.join(OUT, "manifest.json"), JSON.stringify(manifest, null, 1));

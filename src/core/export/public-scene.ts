@@ -37,25 +37,33 @@ export function effectiveZones(project: Project): Zone[] {
   return project.zones.filter((z) => z.polygon.length >= 3);
 }
 
+/** Geometry as published: GREY areas clipped away, materials resolved (user overrides first). */
+export function publicParts(scene: PreparedScene, project: Project) {
+  const grey = effectiveZones(project).filter((z) => z.kind === "grey");
+  const meshes = scene.parts.map((p) => ({ id: p.id, layer: p.layer, color: p.color, positions: p.positions, normals: p.normals, indices: p.indices, triangleCount: p.indices.length / 3 }));
+  const cut = removeGreyGeometry(meshes, grey);
+  const byId = new Map(scene.parts.map((p) => [p.id, p]));
+  const parts = cut.meshes.map((m) => {
+    const part = byId.get(m.id)!;
+    const presetId = project.materialOverrides[part.key] ?? part.auto.presetId;
+    const uvs = m.positions === part.positions ? part.uvs : boxUV(m.positions, m.normals);
+    return { presetId, positions: m.positions, normals: m.normals, uvs, indices: m.indices };
+  });
+  return { parts, removedTriangles: cut.removedTriangles, clippedTriangles: cut.clippedTriangles };
+}
+
 export function buildPublicScene(scene: PreparedScene, project: Project) {
+  const pp = publicParts(scene, project);
+  const config = publicConfig(scene, project, new Set(pp.parts.map((p) => p.presetId)));
+  const glb = writeGlb(pp.parts);
+  return { glb, config, stats: { removedTriangles: pp.removedTriangles, clippedTriangles: pp.clippedTriangles, triangles: pp.parts.reduce((n, p) => n + p.indices.length / 3, 0) } };
+}
+
+export function publicConfig(scene: PreparedScene, project: Project, usedPresets: Set<string>): PublicConfig {
   const zones = effectiveZones(project);
   const grey = zones.filter((z) => z.kind === "grey");
   const red = zones.filter((z) => z.kind === "red");
   const blockedAny = (p: [number, number, number], pad = 0) => zones.some((z) => z.kind !== "green" && pointInZone(p, z, pad));
-
-  // 1) geometry with grey parts physically removed
-  const meshes = scene.parts.map((p) => ({ id: p.id, layer: p.layer, color: p.color, positions: p.positions, normals: p.normals, indices: p.indices, triangleCount: p.indices.length / 3 }));
-  const cut = removeGreyGeometry(meshes, grey);
-  const byId = new Map(scene.parts.map((p) => [p.id, p]));
-  const glbParts = cut.meshes.map((m) => {
-    const part = byId.get(m.id)!;
-    const presetId = project.materialOverrides[part.key] ?? part.auto.presetId;
-    // UVs must be recomputed for clipped meshes (vertex layout changed)
-    const uvs = m.positions === part.positions ? part.uvs : boxUV(m.positions, m.normals);
-    return { presetId, positions: m.positions, normals: m.normals, uvs, indices: m.indices };
-  });
-  const glb = writeGlb(glbParts);
-
   // 2) levels & spawn points (walkable, not restricted)
   const a = scene.analysis;
   const levels: PublicLevel[] = a.plans.map((p) => {
@@ -85,9 +93,8 @@ export function buildPublicScene(scene: PreparedScene, project: Project) {
   const hotspots = project.hotspots.filter((h) => !grey.some((z) => pointInZone(h.position, z, 0.1)));
   const viewpoints = (project.viewpoints.length ? project.viewpoints : scene.viewpoints).filter((v) => !blockedAny(v.position, 0.3));
 
-  const used = new Set(glbParts.map((p) => p.presetId));
   const materials: Record<string, MaterialPreset> = {};
-  for (const id of used) { const pr = PRESET.get(id); if (pr) materials[id] = pr; }
+  for (const id of usedPresets) { const pr = PRESET.get(id); if (pr) materials[id] = pr; }
 
   let start = scene.start;
   if (blockedAny([start.position[0], start.position[1] + 0.5, start.position[2]], 0.4)) {
@@ -100,7 +107,7 @@ export function buildPublicScene(scene: PreparedScene, project: Project) {
     .map((r) => [r.centroid[0], a.levels[r.level].elevation + Math.min(2.3, a.levels[r.level].height - 0.4), r.centroid[1]] as [number, number, number])
     .filter((p) => !grey.some((z) => pointInZone(p, z, 0.5)));
 
-  const config: PublicConfig = {
+  return {
     format: "archvista-scene", version: 1,
     title: project.title, environment: project.environment, lighting: project.lighting ?? "afternoon", quality: project.quality, accent: project.accent, language: project.language,
     bbox: scene.bbox, groundY: a.groundY,
@@ -109,10 +116,6 @@ export function buildPublicScene(scene: PreparedScene, project: Project) {
     levels: levels.filter((l) => l.spawn),
     barriers: red.map((z) => ({ polygon: z.polygon, yMin: z.yMin, yMax: z.yMax })),
     hotspots, viewpoints, tour: project.tour, materials, lights,
-  };
-  return {
-    glb, config,
-    stats: { removedTriangles: cut.removedTriangles, clippedTriangles: cut.clippedTriangles, triangles: glbParts.reduce((n, p) => n + p.indices.length / 3, 0) },
   };
 }
 

@@ -20,7 +20,8 @@ import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
 import { buildCollider, Walker, DEFAULT_WALKER } from "./physics";
 import { buildEnvironment, disposeGroup, EnvResult, type Lighting } from "./environments";
 import { AssetLibrary } from "./assets";
-import { PointLight } from "three";
+import { PointLight, CircleGeometry, CanvasTexture, ShadowMaterial } from "three";
+import { GroundedSkybox } from "three/examples/jsm/objects/GroundedSkybox.js";
 import { makeMaps } from "./textures";
 import type { PublicConfig } from "../core/export/public-scene";
 import type { EnvironmentId, Hotspot, Quality, Viewpoint } from "../core/project";
@@ -87,12 +88,16 @@ export class ArchViewer {
   mode: Mode = "orbit";
   /** When true the loop stops rendering (used for deterministic stills / tests). */
   paused = false;
+  /** Optional frame cap (tests on software renderers, battery saving). 0 = unlimited. */
+  maxFps = 0;
+  private lastFrame = 0;
   lang: Lang;
   private resizeObs: ResizeObserver;
   private cinematic: boolean;
   readonly lib: AssetLibrary;
   private envGen = 0;
   private roomLights: PointLight[] = [];
+  private skybox: GroundedSkybox | null = null;
 
   constructor(private container: HTMLElement, private opts: ViewerOptions = {}) {
     this.lang = opts.language ?? "de";
@@ -298,6 +303,10 @@ export class ArchViewer {
     this.envGroup = env.group;
     this.scene.add(env.group);
     const gen = ++this.envGen;
+    // asset manifest still loading: show the fallback now, upgrade to the photo surroundings when known
+    if (id !== "studio" && !cfg.hasTerrain && this.lib.hasSync("hdri", `env_${id}`) === undefined) {
+      this.lib.whenReady().then(() => { if (gen === this.envGen && this.config?.environment === id && this.lib.hasSync("hdri", `env_${id}`)) { this.applyEnvironment(id); this.rebuildCollider(); } });
+    }
     // 1) immediate procedural sky (shown until the HDRI has loaded, and as offline fallback)
     if (this.sky) { this.scene.remove(this.sky); this.sky.geometry.dispose(); (this.sky.material as Material).dispose(); this.sky = null; }
     this.envTex?.dispose();
@@ -326,7 +335,37 @@ export class ArchViewer {
     this.hemi.color.set(env.hemi.sky); this.hemi.groundColor.set(env.hemi.ground); this.hemi.intensity = env.hemi.intensity;
     this.renderer.toneMappingExposure = env.exposure;
     this.setRoomLights(lighting === "evening" && id !== "studio");
-    // 2) real HDRI sky + matching sun, once loaded
+    if (this.skybox) { this.scene.remove(this.skybox); this.skybox.geometry.dispose(); (this.skybox.material as Material).dispose(); this.skybox = null; }
+    this.orbit.maxDistance = env.photo ? env.photo.radius * 0.7 : Infinity;
+    // 2a) photographic surroundings: panorama on the ground + lighting from the same HDR
+    if (env.photo) this.lib.photoEnv(env.photo.key).then((ph) => {
+      if (!ph || gen !== this.envGen || this.disposed) return;
+      const h = ph.hdri;
+      const theta = (env.sunAzimuth * Math.PI) / 180 - Math.atan2(h.sunDir.x, h.sunDir.z);
+      const sky = new GroundedSkybox(ph.background, ph.cameraHeight, env.photo!.radius, 96);
+      const sm = sky.material as Material & { toneMapped: boolean; fog: boolean };
+      sm.toneMapped = false; sm.fog = false; // the panorama is already a finished photograph
+      sky.position.set(c[0], cfg.groundY + ph.cameraHeight - 0.01, c[1]);
+      sky.rotation.y = theta;
+      this.skybox = sky;
+      if (this.sky) { this.scene.remove(this.sky); this.sky = null; }
+      this.scene.add(sky);
+      this.scene.background = new Color("#000000");
+      const pm = this.pmrem.fromEquirectangular(h.texture).texture;
+      this.envTex?.dispose(); this.envTex = pm;
+      this.scene.environment = pm;
+      this.scene.environmentRotation.set(0, theta, 0);
+      this.scene.environmentIntensity = 0.9;
+      this.scene.fog = null;
+      const dir = h.sunDir.clone().applyAxisAngle(new Vector3(0, 1, 0), theta);
+      if (dir.y < 0.12) { dir.y = 0.12; dir.normalize(); }
+      this.sun.color.copy(h.sunColor).lerp(new Color(1, 1, 1), 0.5);
+      this.sun.intensity = Math.min(3.4, 1.4 + Math.asin(dir.y) * 5);
+      this.hemi.intensity = 0.03;
+      this.fitShadow(dir);
+      void this.addGroundBlend(id, h.ground, gen);
+    });
+    // 2b) real HDRI sky + matching sun, once loaded
     if (env.hdri) this.lib.hdri(env.hdri).then((h) => {
       if (!h || gen !== this.envGen || this.disposed) return;
       const hdrAz = Math.atan2(h.sunDir.x, h.sunDir.z);
@@ -353,6 +392,40 @@ export class ArchViewer {
       if (env.sky) this.fitShadow(dir);
     });
     this.fitShadow(sunDir);
+  }
+
+  /**
+   * The ground of a projected panorama is smeared close to the camera. Around the building a sharp
+   * photo-scanned ground (colour-matched to the panorama) fades softly into the photo.
+   */
+  private async addGroundBlend(env: EnvironmentId, groundLinear: Color, gen: number) {
+    const key = env === "urban" ? "env_paving" : env === "coastal" ? "env_sand" : "grass";
+    const ph = await this.lib.photo(key);
+    if (!ph || gen !== this.envGen || !this.envGroup || !this.config) return;
+    const b = this.config.bbox;
+    const R = Math.hypot(b.max[0] - b.min[0], b.max[2] - b.min[2]) / 2 + 14;
+    const c = this.center();
+    // hue of the panorama's ground, brightness of the texture itself
+    const texAvg = averageColor(ph.map.image as CanvasImageSource & { width: number; height: number });
+    const lum = (x: Color) => 0.2126 * x.r + 0.7152 * x.g + 0.0722 * x.b || 1;
+    const tint = new Color(groundLinear.r / lum(groundLinear), groundLinear.g / lum(groundLinear), groundLinear.b / lum(groundLinear));
+    if (texAvg) tint.multiply(new Color(lum(texAvg) / (texAvg.r || 1), lum(texAvg) / (texAvg.g || 1), lum(texAvg) / (texAvg.b || 1)));
+    tint.r = Math.min(1.6, tint.r); tint.g = Math.min(1.6, tint.g); tint.b = Math.min(1.6, tint.b);
+    const rep = 1 / ph.size;
+    const cl = (t: Texture) => { const x = t.clone(); x.repeat.set(rep, rep); x.needsUpdate = true; return x; };
+    const mat = new MeshPhysicalMaterial({ map: cl(ph.map), normalMap: cl(ph.normalMap), roughnessMap: cl(ph.arm), roughness: 1, color: tint, transparent: true, depthWrite: false, alphaMap: radialAlpha(), polygonOffset: true, polygonOffsetFactor: -1 });
+    const geo = new CircleGeometry(R, 72);
+    geo.rotateX(-Math.PI / 2);
+    const uv = geo.attributes.uv, pos = geo.attributes.position;
+    const uv1 = new Float32Array(uv.count * 2);
+    for (let i = 0; i < uv.count; i++) { uv1[i * 2] = uv.getX(i); uv1[i * 2 + 1] = uv.getY(i); uv.setXY(i, pos.getX(i) + c[0], pos.getZ(i) + c[1]); }
+    geo.setAttribute("uv1", new BufferAttribute(uv1, 2));
+    (mat.alphaMap as Texture).channel = 1; // radial fade uses the disc's own 0..1 coordinates
+    const disc = new Mesh(geo, mat);
+    disc.position.set(c[0], this.config.groundY + 0.003, c[1]);
+    disc.renderOrder = 1;
+    this.envGroup.add(disc);
+    this.envGroup.traverse((o) => { if ((o as Mesh).material instanceof ShadowMaterial) o.renderOrder = 2; });
   }
 
   /** Warm interior lights for evening scenes (rooms from the analysis, never in restricted areas). */
@@ -434,6 +507,14 @@ export class ArchViewer {
       ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.5, scale: 1.1, samples: this.tier === "ultra" ? 16 : 10 });
       ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: this.tier === "ultra" ? 16 : 8 });
       ao.blendIntensity = 0.85;
+      // the ground-projected panorama is a backdrop, not geometry: keep it out of the occlusion buffers
+      const aoRender = ao.render.bind(ao);
+      ao.render = (...args: Parameters<typeof ao.render>) => {
+        const sky = this.skybox, catcher = this.envRes?.photo ? this.envGroup : null;
+        if (sky) sky.visible = false;
+        if (catcher) catcher.visible = false;
+        try { aoRender(...args); } finally { if (sky) sky.visible = true; if (catcher) catcher.visible = true; }
+      };
       composer.addPass(ao);
       this.aoPass = ao;
     }
@@ -684,6 +765,7 @@ export class ArchViewer {
     if (this.disposed) return;
     this.raf = requestAnimationFrame(this.loop);
     if (this.paused) return;
+    if (this.maxFps > 0) { const now = performance.now(); if (now - this.lastFrame < 1000 / this.maxFps) return; this.lastFrame = now; }
     this.clock.update();
     const dt = Math.min(this.clock.getDelta(), 0.1);
     const t = this.clock.getElapsed();
@@ -844,6 +926,12 @@ export class ArchViewer {
     if (hint) hint.textContent = this.mode === "walk" ? (isCoarse() ? L("hintTouch") : L("hintWalk")) : L("hintOrbit");
   }
 
+  /** Editor: while set, clicks on the model report the hit point instead of navigating. */
+  setPickHandler(fn: ViewerOptions["onPick"] | null) {
+    this.opts.onPick = fn ?? undefined;
+    this.renderer.domElement.style.cursor = fn ? "crosshair" : "";
+  }
+
   setLanguage(l: Lang) { this.lang = l; if (this.hudEl) this.buildHud(); }
 
   dispose() {
@@ -885,6 +973,29 @@ function tintFor(hex: string) {
   const c = new Color(hex);
   const l = (c.r + c.g + c.b) / 3 || 1;
   return new Color(Math.min(1, 0.85 + (c.r / l - 1) * 0.08), Math.min(1, 0.85 + (c.g / l - 1) * 0.08), Math.min(1, 0.85 + (c.b / l - 1) * 0.08)).multiplyScalar(1.15);
+}
+
+function radialAlpha(): CanvasTexture {
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = 256;
+  const x = cv.getContext("2d")!;
+  const g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, "#fff"); g.addColorStop(0.55, "#fff"); g.addColorStop(1, "#000");
+  x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+  return new CanvasTexture(cv);
+}
+
+function averageColor(img: (CanvasImageSource & { width: number; height: number }) | undefined): Color | null {
+  if (!img || typeof document === "undefined") return null;
+  const cv = document.createElement("canvas"); cv.width = cv.height = 16;
+  const x = cv.getContext("2d", { willReadFrequently: true });
+  if (!x) return null;
+  x.drawImage(img, 0, 0, 16, 16);
+  const d = x.getImageData(0, 0, 16, 16).data;
+  let r = 0, g = 0, b = 0;
+  for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+  const n = d.length / 4;
+  return new Color().setRGB(r / n / 255, g / n / 255, b / n / 255, SRGBColorSpace);
 }
 
 function dirFrom(elevDeg: number, azDeg: number) {

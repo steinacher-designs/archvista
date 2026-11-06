@@ -3,7 +3,7 @@
 import {
   BufferGeometry, Color, CylinderGeometry, ConeGeometry, DodecahedronGeometry, Float32BufferAttribute, Group, IcosahedronGeometry,
   InstancedMesh, LatheGeometry, Matrix4, Mesh, MeshStandardMaterial, MeshPhysicalMaterial, Object3D, PlaneGeometry, Quaternion,
-  Vector2, Vector3, BoxGeometry, DoubleSide, CircleGeometry,
+  Vector2, Vector3, BoxGeometry, DoubleSide, CircleGeometry, ShadowMaterial,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { EnvironmentId } from "../core/project";
@@ -41,6 +41,8 @@ export interface EnvResult {
   sunAzimuth: number;
   /** Visitors stay within this radius around the building. */
   walkRadius: number;
+  /** Photographic surroundings (ground-projected panorama) instead of modelled ones. */
+  photo?: { key: string; radius: number };
 }
 
 // ——— seeded random ———
@@ -421,7 +423,28 @@ function studio(ctx: EnvContext): EnvResult {
 
 const deg = (r: number) => (r * 180) / Math.PI;
 
+/** Real photo panorama from Poly Haven, projected onto the ground; only an invisible shadow catcher is modelled. */
+function photo(ctx: EnvContext, key: string): EnvResult {
+  const g = new Group();
+  const radius = Math.max(120, ctx.radius * 8);
+  const catcher = new Mesh(new CircleGeometry(radius * 0.9, 64), new ShadowMaterial({ opacity: 0.42, color: "#1a1814" }));
+  catcher.rotateX(-Math.PI / 2);
+  catcher.position.set(ctx.center[0], ctx.groundY + 0.005, ctx.center[1]);
+  catcher.receiveShadow = true;
+  g.add(catcher);
+  const az = deg(ctx.frontAzimuth) - 62;
+  return {
+    group: g, hdri: null, sunAzimuth: az, sky: null,
+    fog: null, exposure: 0.85,
+    sun: { color: "#fff4e6", intensity: 3, elevation: 35, azimuth: az },
+    hemi: { sky: "#ffffff", ground: "#666666", intensity: 0.05 },
+    walkRadius: Math.min(radius * 0.6, ctx.radius + 30),
+    photo: { key, radius },
+  };
+}
+
 export function buildEnvironment(id: EnvironmentId, ctx: EnvContext): EnvResult {
+  if (id !== "studio" && ctx.lib.hasSync("hdri", `env_${id}`)) return photo(ctx, `env_${id}`);
   switch (id) {
     case "forest": return forest(ctx);
     case "coastal": return coastal(ctx);

@@ -77,7 +77,7 @@ function factList(d: SiteData, cls = "facts") {
 }
 function highlights(d: SiteData, cls = "hls") {
   if (!d.highlights.length) return "";
-  return `<ol class="${cls}">${d.highlights.map((h) => `<li><span class="hl-n">${h.n}</span><div><h3>${esc(h.title)}</h3>${h.text ? paras(h.text) : ""}${h.facts.length ? `<p class="hl-f">${h.facts.map(esc).join(" · ")}</p>` : ""}</div></li>`).join("")}</ol>`;
+  return `<ol class="${cls}">${d.highlights.map((h) => `<li><span class="hl-n">${h.n}</span><div>${h.image ? `<img src="${esc(h.image)}" alt="" loading="lazy" style="border-radius:8px;margin-bottom:10px">` : ""}<h3>${esc(h.title)}</h3>${h.text ? paras(h.text) : ""}${h.facts.length ? `<p class="hl-f">${h.facts.map(esc).join(" · ")}</p>` : ""}</div></li>`).join("")}</ol>`;
 }
 function gallery(d: SiteData, cls = "gal") {
   if (!d.gallery.length) return "";

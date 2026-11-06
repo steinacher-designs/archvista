@@ -28,6 +28,12 @@ export function requiredAssets(config: PublicConfig, manifest: { textures: Recor
   const tex = (k: string) => { if (manifest.textures[k]) for (const s of ["col", "nor", "arm"]) out.add(`tex/${k}_${s}.webp`); };
   for (const id of Object.keys(config.materials)) tex(id);
   const env = config.hasTerrain ? "studio" : config.environment;
+  // photographic surroundings: one panorama + its HDR replace modelled terrain, plants and sky
+  if (env !== "studio" && manifest.hdri[`env_${env}`]) {
+    out.add(`hdri/env_${env}.hdr`); out.add(`hdri/env_${env}_bg.webp`);
+    tex(env === "urban" ? "env_paving" : env === "coastal" ? "env_sand" : "grass"); // sharp ground around the building
+    return [...out];
+  }
   const ground: Record<string, string[]> = { forest: ["grass"], coastal: ["env_sand", "grass"], urban: ["env_asphalt", "env_paving", "grass"], studio: [] };
   ground[env].forEach(tex);
   const hdri = env === "studio" ? "studio" : config.lighting ?? "afternoon";
@@ -70,7 +76,7 @@ export function siteData(input: SiteInput): SiteData {
     accent: p.accent,
     year: new Date(p.updatedAt).getFullYear(),
     facts,
-    highlights: pub.config.hotspots.map((h, i) => ({ n: i + 1, title: h.title, text: h.text, facts: [...(h.facts ?? []), ...(h.materialSpec ? [h.materialSpec] : [])] })),
+    highlights: pub.config.hotspots.map((h, i) => ({ n: i + 1, title: h.title, text: h.text, image: h.image, facts: [...(h.facts ?? []), ...(h.materialSpec ? [h.materialSpec] : [])] })),
     gallery,
     hero: gallery[0]?.src ?? null,
     levels: pub.config.levels.map((l) => (L === "de" ? l.name.de : l.name.en)),
@@ -80,7 +86,19 @@ export function siteData(input: SiteInput): SiteData {
 
 export async function generateSite(input: SiteInput): Promise<FileMap> {
   const files: FileMap = new Map();
-  const { project: p, pub } = input;
+  const { project: p } = input;
+  // info-point images: data URLs become files, the public config references the file
+  const hsImages: [string, Uint8Array][] = [];
+  const cfg: PublicConfig = { ...input.pub.config, hotspots: input.pub.config.hotspots.map((h, i) => {
+    if (!h.image?.startsWith("data:")) return h;
+    const b = dataUrlBytes(h.image);
+    if (!b) return { ...h, image: undefined };
+    const name = `images/hotspot-${i + 1}${extOf(h.image)}`;
+    hsImages.push([name, b]);
+    return { ...h, image: name };
+  }) };
+  const pub = { ...input.pub, config: cfg };
+  input = { ...input, pub };
   const data = siteData(input);
   // deterministic build id: changes whenever the scene or the page settings change
   data.buildId = (await gitBlobSha(enc.encode(JSON.stringify(pub.config) + JSON.stringify(data)))).slice(0, 12);
@@ -95,11 +113,22 @@ export async function generateSite(input: SiteInput): Promise<FileMap> {
   const manifest = manifestBytes ? JSON.parse(new TextDecoder().decode(manifestBytes)) : { textures: {}, hdri: {}, models: {} };
   const licences = JSON.parse(new TextDecoder().decode((await input.readAsset("LICENSES.json")) ?? enc.encode("{}")));
   const used: Record<string, { name: string; authors: string[]; url: string; licence: string }> = {};
+  const shipped = new Set<string>();
   for (const rel of requiredAssets(pub.config, manifest)) {
+    if (rel === "manifest.json") continue;
     const b = await input.readAsset(rel);
     if (!b) continue;
     files.set(`assets/lib/${rel}`, b);
+    shipped.add(rel);
   }
+  // the site's manifest lists only what it ships, so the viewer never asks for missing files
+  const has = (dir: string, key: string, suffix: string) => shipped.has(`${dir}/${key}${suffix}`);
+  const trimmed = {
+    textures: Object.fromEntries(Object.entries(manifest.textures).filter(([k]) => has("tex", k, "_col.webp"))),
+    hdri: Object.fromEntries(Object.entries(manifest.hdri).filter(([k]) => has("hdri", k, ".hdr"))),
+    models: Object.fromEntries(Object.entries(manifest.models).filter(([k]) => has("models", k, ".glb"))),
+  };
+  files.set("assets/lib/manifest.json", enc.encode(JSON.stringify(trimmed)));
   for (const [k, v] of Object.entries(licences) as [string, { name: string; authors: string[]; url: string; licence: string }][]) {
     const kk = k.replace(/^(hdri_|model_)/, "");
     const inSite = [...files.keys()].some((f) => f.includes(`/${kk}.`) || f.includes(`/${kk}_`));
@@ -107,6 +136,7 @@ export async function generateSite(input: SiteInput): Promise<FileMap> {
   }
   // images
   for (const r of input.renders ?? []) files.set(`images/${r.id}.jpg`, r.data);
+  for (const [k, v] of hsImages) files.set(k, v);
   p.images.forEach((im, i) => { const b = dataUrlBytes(im.dataUrl); if (b) files.set(`images/user-${i + 1}${extOf(im.dataUrl)}`, b); });
   files.set("credits.html", enc.encode(credits(p, used)));
   return files;

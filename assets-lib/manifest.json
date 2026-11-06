@@ -56,7 +56,19 @@
   "day": {},
   "afternoon": {},
   "evening": {},
-  "studio": {}
+  "studio": {},
+  "env_urban": {
+   "photo": true,
+   "cameraHeight": 1.7
+  },
+  "env_forest": {
+   "photo": true,
+   "cameraHeight": 1.7
+  },
+  "env_coastal": {
+   "photo": true,
+   "cameraHeight": 1.7
+  }
  },
  "models": {
   "shrub_a": {},

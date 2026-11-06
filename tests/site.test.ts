@@ -59,9 +59,9 @@ describe("website generator", () => {
       const keys = [...files.keys()];
       expect(keys).toEqual(expect.arrayContaining(["index.html", "credits.html", "assets/scene.glb", "assets/scene.json", "assets/viewer.js", ".nojekyll"]));
       const hdr = keys.filter((k) => k.endsWith(".hdr"));
-      expect(hdr).toEqual([env.id === "studio" ? "assets/lib/hdri/studio.hdr" : "assets/lib/hdri/evening.hdr"]);
-      if (env.id === "forest") expect(keys).toContain("assets/lib/models/tree_a.glb");
-      if (env.id === "studio") expect(keys.some((k) => k.includes("/models/"))).toBe(false);
+      expect(hdr).toEqual([env.id === "studio" ? "assets/lib/hdri/studio.hdr" : `assets/lib/hdri/env_${env.id}.hdr`]);
+      if (env.id !== "studio") expect(keys).toContain(`assets/lib/hdri/env_${env.id}_bg.webp`);
+      expect(keys.some((k) => k.includes("/models/"))).toBe(false); // photo surroundings need no plant models
       // only textures of materials actually used (+ environment ground)
       expect(keys).not.toContain("assets/lib/tex/brick_col.webp");
     }
@@ -72,8 +72,8 @@ describe("website generator", () => {
     const c = new TextDecoder().decode(files.get("credits.html")!);
     expect(c).toMatch(/CC0/);
     expect(c).toMatch(/polyhaven\.com/);
-    expect(c).toMatch(/ambientcg\.com/); // lawn
-    expect(c).not.toMatch(/Coast Sand/i); // sand texture not shipped in forest
+    expect(c).toMatch(/Alps Field/); // the panorama of the nature environment
+    expect(c).not.toMatch(/Spiaggia/i); // beach panorama not shipped in the nature site
   });
 
   it("facts are measured and exclude hidden rooms", async () => {

@@ -16,7 +16,7 @@ export interface Manifest {
 }
 
 export interface PhotoMaps { map: Texture; normalMap: Texture; arm: Texture; size: number }
-export interface HdriInfo { texture: DataTexture; sunDir: Vector3; sunColor: Color; horizon: Color; zenith: Color }
+export interface HdriInfo { texture: DataTexture; sunDir: Vector3; sunColor: Color; horizon: Color; zenith: Color; ground: Color }
 export interface ModelPart { geometry: BufferGeometry; material: Material }
 export interface ModelAsset { parts: ModelPart[]; height: number }
 
@@ -34,6 +34,28 @@ export class AssetLibrary {
     this.ready = base
       ? fetch(base + "manifest.json").then((r) => (r.ok ? r.json() : null)).then((m) => { this.manifest = m; }).catch(() => { this.manifest = null; })
       : Promise.resolve();
+  }
+
+  /** Synchronous check (manifest already loaded); undefined while still loading. */
+  hasSync(kind: keyof Manifest, key: string): boolean | undefined {
+    if (!this.base) return false;
+    if (!this.manifest) return undefined;
+    return !!this.manifest[kind]?.[key];
+  }
+  whenReady() { return this.ready; }
+
+  /** Photographic surroundings: HDR for lighting + high-resolution panorama for display. */
+  photoEnv(key: string): Promise<{ hdri: HdriInfo; background: Texture; cameraHeight: number } | null> {
+    return this.track((async () => {
+      const h = await this.hdri(key);
+      if (!h) return null;
+      try {
+        const bg = await new TextureLoader().loadAsync(`${this.base}hdri/${key}_bg.webp`);
+        bg.colorSpace = SRGBColorSpace; bg.mapping = EquirectangularReflectionMapping; bg.anisotropy = 8;
+        const meta = (this.manifest?.hdri[key] ?? {}) as { cameraHeight?: number };
+        return { hdri: h, background: bg, cameraHeight: meta.cameraHeight ?? 1.7 };
+      } catch { return null; }
+    })());
   }
 
   async has(kind: keyof Manifest, key: string) {
@@ -112,7 +134,7 @@ export class AssetLibrary {
  * Locate the sun in an equirectangular HDR (brightest region in the upper half) and measure
  * horizon/zenith colours so fog and lights match the sky.
  */
-export function analyseHdri(t: DataTexture): { sunDir: Vector3; sunColor: Color; horizon: Color; zenith: Color } {
+export function analyseHdri(t: DataTexture): { sunDir: Vector3; sunColor: Color; horizon: Color; zenith: Color; ground: Color } {
   const { width: W, height: H } = t.image as { width: number; height: number };
   const d = t.image.data as unknown as Float32Array;
   const ch = d.length / (W * H);
@@ -138,12 +160,14 @@ export function analyseHdri(t: DataTexture): { sunDir: Vector3; sunColor: Color;
     return c.map((v) => v / W);
   };
   const hz = avgRow(Math.floor(H * 0.47)), zn = avgRow(Math.floor(H * 0.08));
+  const gr = [0, 0, 0];
+  for (const f of [0.72, 0.78, 0.84, 0.9]) { const r = avgRow(Math.floor(H * f)); gr[0] += r[0]; gr[1] += r[1]; gr[2] += r[2]; }
   const norm = (c: number[]) => { const k = Math.max(c[0], c[1], c[2]) || 1; return new Color(Math.min(1, c[0] / k * 0.9), Math.min(1, c[1] / k * 0.9), Math.min(1, c[2] / k * 0.9)); };
   // equirect: image row 0 = top (zenith); u = x/W; three samples u = atan(z, x)/(2π) + 0.5
   const u = (bx + 0.5) / W, v = 1 - (by + 0.5) / H;
   const phi = (u - 0.5) * Math.PI * 2, el = (v - 0.5) * Math.PI;
   const sunDir = new Vector3(Math.cos(phi) * Math.cos(el), Math.sin(el), Math.sin(phi) * Math.cos(el)).normalize();
-  return { sunDir, sunColor, horizon: norm(hz), zenith: norm(zn) };
+  return { sunDir, sunColor, horizon: norm(hz), zenith: norm(zn), ground: new Color(gr[0] / 4, gr[1] / 4, gr[2] / 4) };
 }
 
 /** Quantized (KHR_mesh_quantization) attributes must become float before transforming, or they clamp. */

@@ -7,7 +7,7 @@ const srv = http.createServer(async (q, r) => { try { let f = decodeURIComponent
 const port = srv.address().port;
 const b = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 const p = await b.newPage({ viewport: { width: +w, height: +h } });
-const logs = []; p.on("console", (m) => logs.push(m.type() + ": " + m.text())); p.on("pageerror", (e) => logs.push("PAGEERROR " + e.message + "\n" + (e.stack ?? "").split("\n").slice(0, 6).join("\n")));
+const logs = []; p.on("console", (m) => logs.push(m.type() + ": " + m.text())); p.on("response", (r) => { if (r.status() >= 400) logs.push("HTTP " + r.status() + " " + r.url()); }); p.on("pageerror", (e) => logs.push("PAGEERROR " + e.message + "\n" + (e.stack ?? "").split("\n").slice(0, 6).join("\n")));
 await p.goto(`http://localhost:${port}/?still`);
 await p.waitForFunction(() => window.archvista || document.querySelector(".av-loading small"), null, { timeout: 120000 }).catch(() => logs.push("timeout"));
 
@@ -16,5 +16,5 @@ try {
   await p.evaluate(async () => { await window.archvista.renderOnce(); await window.archvista.renderOnce(); });
 } catch (e) { logs.push("EVAL " + e.message); }
 await p.screenshot({ path: outPng, timeout: 180000 });
-console.log(logs.filter((l) => !l.includes("GPU stall")).slice(0, 15).join("\n"));
+console.log(logs.filter((l) => !l.includes("GPU stall")).slice(0, 80).join("\n"));
 await b.close(); srv.close();

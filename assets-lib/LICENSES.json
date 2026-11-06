@@ -379,5 +379,38 @@
       4292.873501777649,
       4649.933725595474
     ]
+  },
+  "hdri_env_urban": {
+    "polyhaven_id": "canary_wharf",
+    "name": "Canary Wharf",
+    "kind": "hdri",
+    "authors": [
+      "Andreas Mischok"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/canary_wharf",
+    "dimensions_mm": null
+  },
+  "hdri_env_forest": {
+    "polyhaven_id": "alps_field",
+    "name": "Alps Field",
+    "kind": "hdri",
+    "authors": [
+      "Andreas Mischok"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/alps_field",
+    "dimensions_mm": null
+  },
+  "hdri_env_coastal": {
+    "polyhaven_id": "spiaggia_di_mondello",
+    "name": "Spiaggia di Mondello",
+    "kind": "hdri",
+    "authors": [
+      "Andreas Mischok"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/spiaggia_di_mondello",
+    "dimensions_mm": null
   }
 }
