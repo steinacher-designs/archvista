@@ -23,7 +23,7 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VITE_GITHUB_CLIENT_ID: ${{ vars.GITHUB_OAUTH_CLIENT_ID }}
+          VITE_GITHUB_CLIENT_ID: ${{ vars.ARCHVISTA_OAUTH_CLIENT_ID }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "ARCHVISTA ${{ github.ref_name }}"

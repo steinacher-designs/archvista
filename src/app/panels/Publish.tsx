@@ -5,7 +5,9 @@ import { buildSiteFiles } from "../sitebuild";
 import { GitHub, PublishError, pollDeviceToken, slugify, startDeviceFlow, type DeviceCode, type Progress, type PublishResult } from "../../core/publish/github";
 
 const TOKEN = "github-token";
-export const clientId = () => localStorage.getItem("av-gh-client") || (import.meta.env.VITE_GITHUB_CLIENT_ID as string | undefined) || "";
+/** Public OAuth client id of the ARCHVISTA GitHub app (device flow; not a secret). */
+export const DEFAULT_CLIENT_ID = "Ov23liXGMwATY5PYtzgz";
+export const clientId = () => localStorage.getItem("av-gh-client") || (import.meta.env.VITE_GITHUB_CLIENT_ID as string | undefined) || DEFAULT_CLIENT_ID;
 
 export function PublishPanel() {
   const { t, project, scene, update, addTiming, timings, startedAt, autoMode, lang } = useStore();

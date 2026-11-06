@@ -32,7 +32,7 @@ node scripts/fetch-assets.mjs  # CC0-Inhalte neu laden und aufbereiten
 ```
 
 ## Release
-Tag `vX.Y.Z` pushen → GitHub Action „Release“ baut auf Windows Setup-.exe und .msi und legt einen Release-Entwurf an. Die GitHub-OAuth-Client-ID wird als Repository-Variable `GITHUB_OAUTH_CLIENT_ID` hinterlegt.
+Tag `vX.Y.Z` pushen → GitHub Action „Release“ baut auf Windows Setup-.exe und .msi und legt einen Release-Entwurf an. Die GitHub-OAuth-Client-ID wird als Repository-Variable `ARCHVISTA_OAUTH_CLIENT_ID` (optional; Standard ist die ARCHVISTA-App) hinterlegt.
 
 ## Technische Entscheidungen
 - **Three.js direkt statt React Three Fiber** im Viewer: dieselbe Laufzeit läuft in der App und als eigenständige Website (eine ES-Datei, ~290 KB gzip), ohne React auf der Website.
