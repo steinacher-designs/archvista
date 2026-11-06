@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useStore } from "./store";
 import { Home, Processing, Failed } from "./screens/Home";
 import { Work } from "./screens/Work";
+import { platform } from "./platform";
 
 export function App() {
   const { screen, t, lang, setLang, project, past, future, undo, redo, saving, goHome, resetAuto } = useStore();
@@ -16,6 +17,8 @@ export function App() {
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, []);
+  // a DXF opened via Explorer ("Öffnen mit ARCHVISTA")
+  useEffect(() => { platform.startupFile().then((f) => { if (f) void useStore.getState().openBytes(f.bytes, f.name); }); }, []);
   // never let a stray file drop navigate the window away
   useEffect(() => {
     const prevent = (e: DragEvent) => e.preventDefault();

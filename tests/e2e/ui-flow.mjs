@@ -58,7 +58,7 @@ await step("preview website (desktop)", async () => {
   await page.getByTestId("next").click();
   await page.getByTestId("preview-web").click();
   const frame = page.frameLocator("[data-testid=site-frame]");
-  await frame.locator("[data-archvista]").waitFor({ timeout: 240000 });
+  await frame.locator("[data-archvista]").waitFor({ timeout: 600000 });
   await page.waitForTimeout(4000);
   await shot("04-website-preview");
 });

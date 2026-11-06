@@ -200,6 +200,22 @@ fn secret_delete(key: String) -> Result<(), String> {
     }
 }
 
+// ——— file passed on the command line ("Open with ARCHVISTA" / double-click in Explorer) ———
+
+#[derive(Serialize)]
+struct StartupFile {
+    name: String,
+    bytes: Vec<u8>,
+}
+
+#[tauri::command]
+fn startup_file() -> Option<StartupFile> {
+    let path = std::env::args().skip(1).find(|a| a.to_lowercase().ends_with(".dxf"))?;
+    let p = PathBuf::from(&path);
+    let bytes = fs::read(&p).ok()?;
+    Some(StartupFile { name: p.file_name()?.to_string_lossy().to_string(), bytes })
+}
+
 // ——— benchmarks ———
 
 #[tauri::command]
@@ -241,7 +257,8 @@ pub fn run() {
             secret_set,
             secret_get,
             secret_delete,
-            benchmark_append
+            benchmark_append,
+            startup_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running ARCHVISTA");

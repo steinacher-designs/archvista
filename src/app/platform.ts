@@ -134,6 +134,14 @@ export const platform = {
     },
   },
 
+  /** A .dxf passed by the operating system (double-click / "open with"). */
+  async startupFile(): Promise<{ name: string; bytes: Uint8Array } | null> {
+    if (!isTauri) return null;
+    const { invoke } = await core();
+    const f = await invoke<{ name: string; bytes: number[] } | null>("startup_file");
+    return f ? { name: f.name, bytes: new Uint8Array(f.bytes) } : null;
+  },
+
   async appendBenchmark(line: Record<string, unknown>) {
     if (isTauri) { const { invoke } = await core(); await invoke("benchmark_append", { line: JSON.stringify(line) }).catch(() => {}); }
     else console.info("[benchmark]", line);
