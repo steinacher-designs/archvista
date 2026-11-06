@@ -12,12 +12,13 @@ const srv = http.createServer(async (q, r) => {
 const url = `http://localhost:${srv.address().port}/`;
 const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+await page.addInitScript(() => { localStorage.setItem("av-maxfps", "0.5"); localStorage.setItem("av-auto", "0"); });
 const errors = []; page.on("pageerror", (e) => errors.push(e.message)); page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 const results = [];
 const step = async (name, fn) => { const t0 = Date.now(); try { await fn(); results.push(`✓ ${name} (${((Date.now() - t0) / 1000).toFixed(1)} s)`); } catch (e) { results.push(`✗ ${name}: ${e.message.split("\n")[0]}`); } };
 const shot = (n) => page.screenshot({ path: path.join(outDir, n + ".png"), timeout: 180000 });
 
-await step("home screen", async () => { await page.goto(url); await page.getByText("DXF-Datei hierher ziehen").waitFor(); await page.locator(".auto input").uncheck(); await shot("01-home"); });
+await step("home screen", async () => { await page.goto(url); await page.getByText("DXF-Datei hierher ziehen").waitFor(); await shot("01-home"); });
 const t0 = Date.now();
 await step("import DXF via file chooser", async () => {
   await page.getByTestId("file").setInputFiles(dxf);
@@ -27,7 +28,7 @@ await step("import DXF via file chooser", async () => {
 await step("workspace shows detected storeys and entrance", async () => {
   const stats = await page.locator(".rail .stats").innerText();
   if (!/3 Geschosse erkannt/.test(stats) || !/Eingang erkannt/.test(stats)) throw new Error(stats);
-  await page.waitForTimeout(8000); await shot("02-workspace");
+  await page.waitForTimeout(6000); await shot("02-workspace");
 });
 for (const env of ["urban", "coastal", "studio", "forest"]) await step(`switch environment: ${env}`, async () => { await page.getByTestId(`env-${env}`).click(); await page.waitForTimeout(1500); if (!(await page.getByTestId(`env-${env}`).getAttribute("class")).includes("on")) throw new Error("not selected"); });
 await step("lighting: evening", async () => { await page.getByTestId("tab-light").click(); await page.getByTestId("light-evening").click(); });

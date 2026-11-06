@@ -1,0 +1,37 @@
+name: Release
+# Creates a GitHub Release with the Windows setup (.exe) and MSI whenever a version tag is pushed (e.g. v1.0.0).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
+      - run: npm ci
+      - run: npm test
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_GITHUB_CLIENT_ID: ${{ vars.GITHUB_OAUTH_CLIENT_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "ARCHVISTA ${{ github.ref_name }}"
+          releaseBody: |
+            ## ARCHVISTA herunterladen
+            - **ARCHVISTA_…_x64-setup.exe** – empfohlen: Doppelklick, installieren, fertig.
+            - **ARCHVISTA_…_x64_de-DE.msi** – für IT-Abteilungen / zentrale Verteilung.
+
+            Keine weiteren Programme nötig (kein AutoCAD, Blender oder Python). Windows 10/11, 64 Bit.
+          releaseDraft: true
+          prerelease: false
