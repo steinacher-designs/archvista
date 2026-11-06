@@ -1,0 +1,8 @@
+node_modules/
+dist/
+public/site-runtime/
+.asset-cache/
+.asset-tmp/
+src-tauri/target/
+src-tauri/gen/
+*.log

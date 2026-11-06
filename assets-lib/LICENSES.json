@@ -1,0 +1,383 @@
+{
+  "plaster_white": {
+    "polyhaven_id": "white_plaster_rough_01",
+    "name": "White Plaster Rough 01",
+    "kind": "texture",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/white_plaster_rough_01",
+    "dimensions_mm": [
+      1000,
+      1000
+    ]
+  },
+  "plaster_warm": {
+    "polyhaven_id": "clay_plaster",
+    "name": "Clay Plaster",
+    "kind": "texture",
+    "authors": [
+      "Amal Kumar"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/clay_plaster",
+    "dimensions_mm": [
+      1999.9996423721313,
+      1999.9996423721313
+    ]
+  },
+  "concrete": {
+    "polyhaven_id": "concrete_wall_008",
+    "name": "Concrete Wall 008",
+    "kind": "texture",
+    "authors": [
+      "Dario Barresi",
+      "Charlotte Baglioni"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/concrete_wall_008",
+    "dimensions_mm": [
+      2710.0000381469727,
+      2710.0000381469727
+    ]
+  },
+  "brick": {
+    "polyhaven_id": "brick_wall_02",
+    "name": "Brick Wall 02",
+    "kind": "texture",
+    "authors": [
+      "Dimitrios Savva"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/brick_wall_02",
+    "dimensions_mm": [
+      2000,
+      2000
+    ]
+  },
+  "oak": {
+    "polyhaven_id": "wood_floor",
+    "name": "Wood Floor",
+    "kind": "texture",
+    "authors": [
+      "Dimitrios Savva"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/wood_floor",
+    "dimensions_mm": [
+      1699.9996900558472,
+      1699.9996900558472
+    ]
+  },
+  "dark_wood": {
+    "polyhaven_id": "dark_wooden_planks",
+    "name": "Dark Wooden Planks",
+    "kind": "texture",
+    "authors": [
+      "Amal Kumar"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/dark_wooden_planks",
+    "dimensions_mm": [
+      2000,
+      2000
+    ]
+  },
+  "timber_cladding": {
+    "polyhaven_id": "wood_planks",
+    "name": "Wood Planks",
+    "kind": "texture",
+    "authors": [
+      "Amal Kumar"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/wood_planks",
+    "dimensions_mm": [
+      1499.999761581421,
+      1499.999761581421
+    ]
+  },
+  "stone_tiles": {
+    "polyhaven_id": "granite_tile",
+    "name": "Granite Tile",
+    "kind": "texture",
+    "authors": [
+      "Charlotte Baglioni"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/granite_tile",
+    "dimensions_mm": [
+      2299.999952316284,
+      2299.999952316284
+    ]
+  },
+  "terrace_stone": {
+    "polyhaven_id": "rectangular_paving",
+    "name": "Rectangular Paving",
+    "kind": "texture",
+    "authors": [
+      "Dimitrios Savva"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/rectangular_paving",
+    "dimensions_mm": [
+      2000,
+      2000
+    ]
+  },
+  "roof_clay": {
+    "polyhaven_id": "clay_roof_tiles_02",
+    "name": "Clay Roof Tiles 02",
+    "kind": "texture",
+    "authors": [
+      "Amal Kumar"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/clay_roof_tiles_02",
+    "dimensions_mm": [
+      2500,
+      2500
+    ]
+  },
+  "roof_slate": {
+    "polyhaven_id": "roof_slates_02",
+    "name": "Roof Slates 02",
+    "kind": "texture",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/roof_slates_02",
+    "dimensions_mm": [
+      3000,
+      3000
+    ]
+  },
+  "grass": {
+    "source": "ambientCG",
+    "id": "Grass001",
+    "name": "Grass001",
+    "kind": "texture",
+    "authors": [
+      "ambientCG (Lennart Demes)"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://ambientcg.com/view?id=Grass001",
+    "dimensions_mm": [
+      2000,
+      2000
+    ]
+  },
+  "natural_stone": {
+    "polyhaven_id": "sandstone_blocks_05",
+    "name": "Sandstone Blocks 05",
+    "kind": "texture",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/sandstone_blocks_05",
+    "dimensions_mm": [
+      3000,
+      3000
+    ]
+  },
+  "env_sand": {
+    "polyhaven_id": "coast_sand_01",
+    "name": "Coast Sand 01",
+    "kind": "texture",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/coast_sand_01",
+    "dimensions_mm": [
+      15000,
+      15000
+    ]
+  },
+  "env_asphalt": {
+    "polyhaven_id": "asphalt_02",
+    "name": "Asphalt 02",
+    "kind": "texture",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/asphalt_02",
+    "dimensions_mm": [
+      3000.000238418579,
+      3000
+    ]
+  },
+  "env_forest": {
+    "polyhaven_id": "forest_ground_04",
+    "name": "Forest Ground 04",
+    "kind": "texture",
+    "authors": [
+      "Rob Tuytel",
+      "Rico Cilliers"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/forest_ground_04",
+    "dimensions_mm": [
+      3150.0000953674316,
+      3150.0000953674316
+    ]
+  },
+  "env_paving": {
+    "polyhaven_id": "precast_stone_paving",
+    "name": "Precast Stone Paving",
+    "kind": "texture",
+    "authors": [
+      "Dimitrios Savva"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/precast_stone_paving",
+    "dimensions_mm": [
+      2240.000009536743,
+      2240.000009536743
+    ]
+  },
+  "hdri_day": {
+    "polyhaven_id": "kloofendal_48d_partly_cloudy_puresky",
+    "name": "Kloofendal 48d Partly Cloudy (Pure Sky)",
+    "kind": "hdri",
+    "authors": [
+      "Greg Zaal",
+      "Jarod Guest"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+    "dimensions_mm": null
+  },
+  "hdri_afternoon": {
+    "polyhaven_id": "qwantani_late_afternoon_puresky",
+    "name": "Qwantani Late Afternoon (Pure Sky)",
+    "kind": "hdri",
+    "authors": [
+      "Greg Zaal",
+      "Jarod Guest"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/qwantani_late_afternoon_puresky",
+    "dimensions_mm": null
+  },
+  "hdri_evening": {
+    "polyhaven_id": "belfast_sunset_puresky",
+    "name": "Belfast Sunset (Pure Sky)",
+    "kind": "hdri",
+    "authors": [
+      "Greg Zaal",
+      "Dimitrios Savva",
+      "Jarod Guest"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/belfast_sunset_puresky",
+    "dimensions_mm": null
+  },
+  "hdri_studio": {
+    "polyhaven_id": "studio_small_09",
+    "name": "Studio Small 09",
+    "kind": "hdri",
+    "authors": [
+      "Sergej Majboroda"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/studio_small_09",
+    "dimensions_mm": null
+  },
+  "model_shrub_a": {
+    "polyhaven_id": "shrub_04",
+    "name": "Shrub 04",
+    "kind": "model",
+    "authors": [
+      "Rico Cilliers"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/shrub_04",
+    "dimensions_mm": [
+      746.7864416539669,
+      186.9201734662056,
+      280.6698549538851
+    ]
+  },
+  "model_shrub_b": {
+    "polyhaven_id": "shrub_01",
+    "name": "Shrub 01",
+    "kind": "model",
+    "authors": [
+      "Rico Cilliers"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/shrub_01",
+    "dimensions_mm": [
+      2586.938261985779,
+      218.97432953119278,
+      395.9742886945605
+    ]
+  },
+  "model_grass_a": {
+    "polyhaven_id": "grass_medium_01",
+    "name": "Grass Medium 01",
+    "kind": "model",
+    "authors": [
+      "Rob Tuytel",
+      "Rico Cilliers"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/grass_medium_01",
+    "dimensions_mm": [
+      7266.327619552612,
+      1259.2098712921143,
+      1177.0583391189575
+    ]
+  },
+  "model_rocks": {
+    "polyhaven_id": "rock_moss_set_01",
+    "name": "Rock Moss Set 01",
+    "kind": "model",
+    "authors": [
+      "Kless Gyzen"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/rock_moss_set_01",
+    "dimensions_mm": [
+      8004.603862762451,
+      6948.764801025391,
+      1768.319845199585
+    ]
+  },
+  "model_tree_a": {
+    "polyhaven_id": "island_tree_01",
+    "name": "Island Tree 01",
+    "kind": "model",
+    "authors": [
+      "Rob Tuytel",
+      "Rico Cilliers"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/island_tree_01",
+    "dimensions_mm": [
+      12464.419603347778,
+      4818.506717681885,
+      5027.44660153985
+    ]
+  },
+  "model_tree_b": {
+    "polyhaven_id": "tree_small_02",
+    "name": "Tree Small 02",
+    "kind": "model",
+    "authors": [
+      "Rico Cilliers"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/tree_small_02",
+    "dimensions_mm": [
+      2921.434998512268,
+      4292.873501777649,
+      4649.933725595474
+    ]
+  }
+}

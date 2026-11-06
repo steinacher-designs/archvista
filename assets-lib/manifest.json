@@ -1,0 +1,69 @@
+{
+ "textures": {
+  "plaster_white": {
+   "size": 1
+  },
+  "plaster_warm": {
+   "size": 2
+  },
+  "concrete": {
+   "size": 2.71
+  },
+  "brick": {
+   "size": 2
+  },
+  "oak": {
+   "size": 1.7
+  },
+  "dark_wood": {
+   "size": 2
+  },
+  "timber_cladding": {
+   "size": 1.5
+  },
+  "stone_tiles": {
+   "size": 2.3
+  },
+  "terrace_stone": {
+   "size": 2
+  },
+  "roof_clay": {
+   "size": 2.5
+  },
+  "roof_slate": {
+   "size": 3
+  },
+  "grass": {
+   "size": 2
+  },
+  "natural_stone": {
+   "size": 3
+  },
+  "env_sand": {
+   "size": 15
+  },
+  "env_asphalt": {
+   "size": 3
+  },
+  "env_forest": {
+   "size": 3.15
+  },
+  "env_paving": {
+   "size": 2.24
+  }
+ },
+ "hdri": {
+  "day": {},
+  "afternoon": {},
+  "evening": {},
+  "studio": {}
+ },
+ "models": {
+  "shrub_a": {},
+  "shrub_b": {},
+  "grass_a": {},
+  "rocks": {},
+  "tree_a": {},
+  "tree_b": {}
+ }
+}
