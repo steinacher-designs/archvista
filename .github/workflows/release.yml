@@ -1,5 +1,6 @@
 name: Release
-# Creates a GitHub Release with the Windows setup (.exe) and MSI whenever a version tag is pushed (e.g. v1.0.0).
+# Creates a GitHub Release (draft) with the Windows setup (.exe) and MSI.
+# Start it manually ("Run workflow") or by pushing a version tag; the tag v<version> is taken from tauri.conf.json.
 on:
   push:
     tags: ["v*"]
@@ -25,8 +26,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GITHUB_CLIENT_ID: ${{ vars.ARCHVISTA_OAUTH_CLIENT_ID }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "ARCHVISTA ${{ github.ref_name }}"
+          tagName: v__VERSION__
+          releaseName: "ARCHVISTA v__VERSION__"
           releaseBody: |
             ## ARCHVISTA herunterladen
             - **ARCHVISTA_…_x64-setup.exe** – empfohlen: Doppelklick, installieren, fertig.
