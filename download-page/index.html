@@ -34,6 +34,8 @@
   .feat b { display: block; margin-bottom: 4px; }
   .note { background: #fff; border-radius: 18px; padding: 22px 24px; }
   .note ol { margin: 8px 0 0; padding-left: 20px; color: var(--ink2); }
+  .warn-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 16px; font-size: 15.5px; }
+  @media (max-width: 860px) { .warn-steps { grid-template-columns: 1fr; } }
   kbd { font: 600 14px ui-monospace, Consolas, monospace; background: #f1eee8; border-radius: 6px; padding: 2px 7px; }
   footer { padding: 40px 0 60px; color: var(--ink3); font-size: 14px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; border-top: 1px solid var(--line); }
   footer b { color: var(--ink2); }
@@ -53,7 +55,7 @@
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/></svg>
         Kostenlos herunterladen
       </a>
-      <div class="meta">Für Windows 10 und 11 · ca. 70 MB · <span id="ver">neueste Version</span> · <a href="https://github.com/steinacher-designs/archvista/releases">alle Versionen</a></div>
+      <div class="meta">Für Windows 10 und 11 · ca. 70 MB · <span id="ver">neueste Version</span> · <a href="https://github.com/steinacher-designs/archvista/releases">alle Versionen</a><br>Warnung vom Browser oder Windows? <a href="#hinweise">So geht's weiter</a></div>
     </div>
     <div class="shot"><img src="screenshot.jpg" alt="ARCHVISTA: Haus in fotorealistischer Umgebung" onerror="this.parentNode.style.display='none'"></div>
   </div>
@@ -67,11 +69,18 @@
     </ol>
   </section>
 
-  <section>
+  <section id="hinweise">
     <div class="note">
-      <b>Windows zeigt „Der Computer wurde durch Windows geschützt“?</b>
-      Das erscheint bei neuen, noch wenig verbreiteten Programmen ohne kostenpflichtiges Zertifikat. ARCHVISTA ist quelloffen und kostenlos.
-      <ol><li>Auf <b>„Weitere Informationen“</b> klicken</li><li>dann auf <b>„Trotzdem ausführen“</b></li></ol>
+      <b>Hinweise beim Herunterladen? Das ist normal.</b>
+      ARCHVISTA ist neu und (noch) nicht mit einem kostenpflichtigen Zertifikat signiert. Deshalb fragen Browser und Windows einmal nach. Die Datei ist sicher – ARCHVISTA ist quelloffen und kostenlos.
+      <div class="warn-steps">
+        <div><b>Microsoft Edge</b> meldet „… wird häufig nicht heruntergeladen“:
+          <ol><li>In der Downloadliste beim Eintrag auf <b>„…“</b> klicken → <b>„Beibehalten“</b></li><li><b>„Mehr anzeigen“</b> → <b>„Trotzdem beibehalten“</b></li></ol></div>
+        <div><b>Google Chrome</b> meldet „Datei nicht sicher“:
+          <ol><li>In der Downloadliste auf den Eintrag klicken</li><li><b>„Trotzdem herunterladen“</b> wählen</li></ol></div>
+        <div><b>Windows</b> zeigt „Der Computer wurde durch Windows geschützt“:
+          <ol><li>Auf <b>„Weitere Informationen“</b> klicken</li><li>dann auf <b>„Trotzdem ausführen“</b></li></ol></div>
+      </div>
     </div>
   </section>
 
