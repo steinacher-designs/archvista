@@ -20,7 +20,7 @@ import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
 import { buildCollider, Walker, DEFAULT_WALKER } from "./physics";
 import { buildEnvironment, disposeGroup, EnvResult, type Lighting } from "./environments";
 import { AssetLibrary } from "./assets";
-import { PointLight, CircleGeometry, CanvasTexture, ShadowMaterial, Quaternion } from "three";
+import { PointLight, CircleGeometry, CanvasTexture, ShadowMaterial, Quaternion, MeshBasicMaterial, TextureLoader, RepeatWrapping } from "three";
 import { GroundedSkybox } from "three/examples/jsm/objects/GroundedSkybox.js";
 import { makeMaps } from "./textures";
 import type { PublicConfig } from "../core/export/public-scene";
@@ -47,9 +47,13 @@ export interface ViewerOptions {
   assetBase?: string | null;
   /** Offer "VR headset" (WebXR) when the browser supports immersive VR (published websites). */
   vr?: boolean;
+  /** Where own texture images live: base URL (websites) … */
+  imageBase?: string;
+  /** … or a resolver (desktop app: images are stored with the project). */
+  resolveImage?: (name: string) => Promise<string | null>;
 }
 
-export interface BuildingPart { presetId: string; positions: Float32Array; normals: Float32Array; uvs: Float32Array; indices: Uint32Array | Uint16Array }
+export interface BuildingPart { presetId: string; /** editor only: which model part this is (never published) */ key?: string; positions: Float32Array; normals: Float32Array; uvs: Float32Array; indices: Uint32Array | Uint16Array }
 
 export class ArchViewer {
   readonly renderer: WebGLRenderer;
@@ -167,8 +171,9 @@ export class ArchViewer {
   }
 
   /** Replace the building (used directly by the desktop app for instant previews). */
-  setBuilding(parts: BuildingPart[], config: PublicConfig) {
+  setBuilding(parts: BuildingPart[], config: PublicConfig, opts: { keepView?: boolean } = {}) {
     this.invalidate(8);
+    this.highlight(null);
     this.config = config;
     disposeGroup(this.building);
     this.building.clear();
@@ -187,6 +192,7 @@ export class ArchViewer {
       mesh.castShadow = !glass;
       mesh.receiveShadow = true;
       mesh.userData.presetId = p.presetId;
+      mesh.userData.key = p.key;
       if (glass) mesh.renderOrder = 2;
       this.building.add(mesh);
     }
@@ -195,8 +201,63 @@ export class ArchViewer {
     this.applyEnvironment(config.environment);
     this.applyTier(this.quality === "auto" ? this.autoTier() : (this.quality as Tier));
     if (!this.walker) this.mode = "orbit";
-    this.resetView();
+    if (!opts.keepView) this.resetView();
     if (this.opts.hud !== false) this.buildHud();
+  }
+
+  /**
+   * Editor: change materials in place — no rebuild, the camera stays where it is.
+   * `byKey` maps model part → material id. Returns false when the building has no part keys (then rebuild).
+   */
+  setPartMaterials(byKey: Map<string, string>, materials: Record<string, MaterialPreset>): boolean {
+    if (!this.config) return true;
+    let keyed = false;
+    this.config = { ...this.config, materials: { ...this.config.materials, ...materials } };
+    this.building.traverse((o) => {
+      const me = o as Mesh;
+      if (!me.isMesh || !me.userData.key) return;
+      keyed = true;
+      const id = byKey.get(me.userData.key);
+      if (!id || id === me.userData.presetId) return;
+      me.material = this.material(id, materials[id]);
+      me.userData.presetId = id;
+      const glass = id.split("~")[0] === "glass";
+      me.castShadow = !glass; me.renderOrder = glass ? 2 : 0;
+    });
+    // free materials nobody uses any more (colour dragging creates many)
+    const used = new Set<Material>();
+    this.building.traverse((o) => { const me = o as Mesh; if (me.isMesh) used.add(me.material as Material); });
+    for (const [id, m] of this.mats) if (!used.has(m)) { disposeMaterial(m); this.mats.delete(id); }
+    this.invalidate(8);
+    return keyed;
+  }
+
+  // ——— editor: highlight parts / click a surface to find its part ———
+  private hlGroup = new Group();
+  private hlMat = new MeshBasicMaterial({ color: "#5d6db0", transparent: true, opacity: 0.45, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: DoubleSide });
+  private hlKey: string | null = null;
+  /** Tint all surfaces of one model part (null clears). */
+  highlight(key: string | null) {
+    if (key === this.hlKey) return;
+    this.hlKey = key;
+    if (!this.hlGroup.parent) { this.hlGroup.name = "highlight"; this.scene.add(this.hlGroup); this.hlMat.clippingPlanes = [this.clipPlane]; }
+    this.hlGroup.clear();
+    if (key) this.building.traverse((o) => {
+      const me = o as Mesh;
+      if (me.isMesh && me.userData.key === key) { const h = new Mesh(me.geometry, this.hlMat); h.renderOrder = 5; h.raycast = () => {}; this.hlGroup.add(h); }
+    });
+    this.invalidate(4);
+  }
+  private onPartPick: ((key: string) => void) | null = null;
+  /** While set, a click (not a drag) on the model reports which part was hit. */
+  setPartPickHandler(fn: ((key: string) => void) | null) { this.onPartPick = fn; }
+  private partAt(e: MouseEvent): string | null {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ray = new Raycaster();
+    ray.setFromCamera(new Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.camera);
+    ray.firstHitOnly = true;
+    const hit = ray.intersectObject(this.building, true).find((h) => (h.object as Mesh).userData.key);
+    return hit ? (hit.object as Mesh).userData.key as string : null;
   }
 
   private material(id: string, pr?: MaterialPreset): Material {
@@ -225,6 +286,23 @@ export class ArchViewer {
         m[k] = tx;
       }
       m.normalScale.set(0.8, 0.8);
+    }
+    // own texture image (from the CAD file): tiles every `scale` metres, colour stays neutral
+    if (pr.image) {
+      const img = pr.image;
+      void (async () => {
+        const url = this.opts.resolveImage ? await this.opts.resolveImage(img) : `${this.opts.imageBase ?? "assets/tex-user/"}${encodeURIComponent(img)}`;
+        if (!url || this.mats.get(id) !== m) return;
+        try {
+          const tx = await new TextureLoader().loadAsync(url);
+          if (this.mats.get(id) !== m) { tx.dispose(); return; }
+          tx.wrapS = tx.wrapT = RepeatWrapping; tx.colorSpace = SRGBColorSpace; tx.anisotropy = 8;
+          const rep = 1 / Math.max(0.05, pr!.scale || 1);
+          tx.repeat.set(rep, rep);
+          m.map = tx; m.color.set("#ffffff"); m.needsUpdate = true;
+          this.invalidate(4);
+        } catch { /* missing image: keep the plain colour */ }
+      })();
     }
     // upgrade to photo-scanned textures when the asset library has them
     if (pr.texture !== "none") {
@@ -748,7 +826,14 @@ export class ArchViewer {
     window.addEventListener("keydown", kd);
     window.addEventListener("keyup", ku);
     window.addEventListener("blur", () => this.keys.clear());
+    let downAt: { x: number; y: number } | null = null;
+    cv.addEventListener("pointerdown", (e) => { downAt = { x: e.clientX, y: e.clientY }; });
     cv.addEventListener("click", (e) => {
+      if (this.onPartPick && this.mode !== "walk") {
+        const dragged = downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5;
+        if (!dragged) { const k = this.partAt(e); if (k) this.onPartPick(k); }
+        return;
+      }
       if (this.opts.onPick) {
         const hit = this.pick(e);
         if (hit) this.opts.onPick(hit.point, hit.normal);
@@ -1290,5 +1375,15 @@ function dirFrom(elevDeg: number, azDeg: number) {
 }
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+function disposeMaterial(m: Material) {
+  const mm = m as MeshPhysicalMaterial;
+  for (const k of ["map", "normalMap", "roughnessMap", "aoMap"] as const) {
+    const t = mm[k];
+    // aoMap and roughnessMap may be the same texture
+    if (t && !(k === "aoMap" && t === mm.roughnessMap)) t.dispose();
+  }
+  m.dispose();
+}
+
 const isCoarse = () => typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
 void FrontSide; void Object3D;

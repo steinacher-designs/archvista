@@ -23,11 +23,16 @@ export interface MaterialPreset {
   paintable?: boolean;
   /** Texture library key when it differs from id (colour variants). */
   tex?: string;
+  /** Own texture image (from the CAD file's ZIP): file name; the viewer resolves where it lives. */
+  image?: string;
+  /** Name of the CAD material this came from. */
+  cadName?: string;
 }
 
-export type MaterialGroup = "wall" | "floor" | "wood" | "stone" | "roof" | "metal" | "glass" | "outdoor";
+export type MaterialGroup = "cad" | "wall" | "floor" | "wood" | "stone" | "roof" | "metal" | "glass" | "outdoor";
 
 export const GROUP_LABEL: Record<MaterialGroup, { de: string; en: string }> = {
+  cad: { de: "Aus der CAD-Datei", en: "From the CAD file" },
   wall: { de: "Wand & Putz", en: "Walls & plaster" }, floor: { de: "Boden", en: "Floors" }, wood: { de: "Holz", en: "Wood" },
   stone: { de: "Stein & Beton", en: "Stone & concrete" }, roof: { de: "Dach", en: "Roof" }, metal: { de: "Metall", en: "Metal" },
   glass: { de: "Glas", en: "Glass" }, outdoor: { de: "Außen", en: "Outdoor" },
@@ -104,9 +109,17 @@ const BASE = new Map(PRESETS.map((p) => [p.id, p]));
  * Material ids may carry a user colour: "plaster_white~#a3b1c2". The derived preset keeps the
  * base id in `tex` so the photo texture of the base material is used.
  */
+/** Materials with own texture images (id "img:…"), registered per project. */
+const CUSTOM = new Map<string, MaterialPreset>();
+export function setCustomPresets(list: MaterialPreset[] | undefined) {
+  CUSTOM.clear();
+  for (const p of list ?? []) CUSTOM.set(p.id, p);
+}
+export const customPresets = () => [...CUSTOM.values()];
+
 export function resolvePreset(id: string): MaterialPreset | undefined {
   const [baseId, colour] = id.split("~");
-  const base = BASE.get(baseId);
+  const base = BASE.get(baseId) ?? CUSTOM.get(baseId);
   if (!base || !colour) return base;
   return { ...base, id, color: colour, tex: baseId } as MaterialPreset;
 }
@@ -118,7 +131,12 @@ export const PRESET = { get: resolvePreset, has: (id: string) => !!resolvePreset
 
 export type Role = "all" | "top" | "under" | "side";
 
-export interface Assignment { presetId: string; reason: "layer" | "colour" | "geometry" | "default" | "user" }
+export interface Assignment {
+  presetId: string;
+  reason: "layer" | "colour" | "geometry" | "default" | "user" | "cad";
+  /** colour taken from the CAD material (hex) */
+  color?: string;
+}
 
 function hsl(rgb: number) {
   const r = ((rgb >> 16) & 255) / 255, g = ((rgb >> 8) & 255) / 255, b = (rgb & 255) / 255;
@@ -177,6 +195,78 @@ export function assignMaterial(layer: string, category: Category, role: Role, co
     }
   }
 }
+
+// ——— materials from the CAD file ———
+const hex = (rgb: number) => "#" + rgb.toString(16).padStart(6, "0");
+/** Keyword rules for CAD material names (German + English, incl. Autodesk library names). First match wins. */
+const CAD_RULES: [RegExp, string | ((t: string, cat: Category) => string)][] = [
+  [/(glas|glass|verglas|glazing|window\s*pane)/, (t) => /(milch|frost|satin|matt|opal)/.test(t) ? "glass_frosted" : /(get[öo]nt|tint|grau|grey|gray|bronze|smoke)/.test(t) ? "glass_tinted" : "glass"],
+  [/(gr[üu]ndach|green\s*roof|sedum)/, "green_roof"],
+  [/(rasen|gras|grass|lawn|turf)/, "grass"],
+  [/(kies|schotter|gravel|split\b)/, "gravel"],
+  [/(dachziegel|roof\s*tile|clay\s*tile|biber|tondach|ziegeldach|terracotta\s*roof)/, "roof_clay"],
+  [/(schiefer|slate|shingle|schindel|eternit)/, (_t, cat) => cat === "floor" ? "slate_floor" : "roof_slate"],
+  [/(klinker|brick|ziegel|backstein|mauerwerk|masonry)/, (t) => /(wei[ßs]|white)/.test(t) ? "white_brick" : /(dunkel|dark|schwarz|black|anthrazit)/.test(t) ? "dark_brick" : "brick"],
+  [/(terrazzo)/, "terrazzo"],
+  [/(marmor|marble)/, (t) => /(schwarz|black|nero|dunkel|dark)/.test(t) ? "marble_black" : "marble_white"],
+  [/(granit|granite)/, "granite_dark"],
+  [/(sandstein|sandstone)/, "sandstone"],
+  [/(beton|concrete|zement|cement|estrich|screed)/, (t, cat) => /(estrich|screed|geschliffen|polished|floor|boden)/.test(t) || cat === "floor" ? "concrete_floor" : /(glatt|smooth|sicht|fair)/.test(t) ? "concrete_smooth" : /(gestrichen|painted)/.test(t) ? "painted_concrete" : "concrete"],
+  [/(fliese|tile|keramik|ceramic|porzellan|porcelain|feinstein)/, (t) => /(wei[ßs]|white)/.test(t) ? "white_tiles" : "stone_tiles"],
+  [/(fischgr[äa]t|herringbone)/, "herringbone"],
+  [/(nuss|walnut)/, "walnut"],
+  [/(r[äa]ucher|smoked)/, "smoked_oak"],
+  [/(l[äa]rche|larch|schalung|cladding|siding|boarding)/, "larch_cladding"],
+  [/(mahagoni|mahogany|kirsch|cherry|teak|wenge|dunkles?\s*holz|dark\s*wood)/, "dark_wood"],
+  [/(esche|ash\b|birke|birch|ahorn|maple|fichte|spruce|kiefer|pine|hell|light)/, (t) => /(holz|wood|timber|parkett|parquet|dielen|floor)/.test(t) || /(esche|ash\b|birke|birch|ahorn|maple|fichte|spruce|kiefer|pine)/.test(t) ? "light_oak" : ""],
+  [/(eiche|oak|parkett|parquet|dielen|floorboard|holz|wood|timber|plywood|sperrholz)/, (_t, cat) => cat === "wall" ? "timber_cladding" : cat === "door" ? "dark_wood" : "oak"],
+  [/(corten|cor-ten|rost|rust|weathering)/, "corten"],
+  [/(kupfer|copper)/, "copper"],
+  [/(messing|brass|bronze)/, "brass"],
+  [/(alu)/, "aluminium"],
+  [/(schwarz|black).*(stahl|steel|metal)|(stahl|steel|metal).*(schwarz|black)/, "black_steel"],
+  [/(edelstahl|stainless|inox|chrom|chrome|stahl|steel)/, "steel"],
+  [/(anthrazit|anthracite|zink|zinc)/, "metal_anthracite"],
+  [/(blech|sheet|trapez|corrugated|wellblech)/, "metal_sheet"],
+  [/(metall|metal)/, "aluminium"],
+  [/(naturstein|natural\s*stone|bruchstein|stein|stone|rock)/, "natural_stone"],
+  [/(edelputz|stucco|reibputz)/, "stucco"],
+  [/(putz|plaster|render|verputz|gips|gypsum|drywall|trockenbau)/, (t) => /(grau|grey|gray)/.test(t) ? "plaster_grey" : /(warm|beige|sand|creme|cream)/.test(t) ? "plaster_warm" : "plaster_white"],
+  [/(lack|lacquer|gloss|hochglanz)/, "lacquer_white"],
+  [/(farbe|paint|anstrich)/, "paint_matte"],
+];
+
+/**
+ * Material for a part that carries a CAD material: by name (and description / texture file name),
+ * keeping the CAD colour where the material is paint-like. Returns null when nothing fits.
+ */
+export function assignFromCad(cad: { name: string; description?: string; map?: string; color?: number; opacity?: number }, category: Category): Assignment | null {
+  const text = `${cad.name} ${cad.description ?? ""} ${cad.map ?? ""}`.toLowerCase().replace(/[_\-.]+/g, " ");
+  let id = "";
+  for (const [re, to] of CAD_RULES) {
+    if (!re.test(text)) continue;
+    id = typeof to === "string" ? to : to(text, category);
+    if (id) break;
+  }
+  if (!id && cad.opacity !== undefined && cad.opacity < 0.8) id = "glass";
+  if (!id && cad.color === undefined) return null;
+  if (!id) id = "paint_matte";
+  const pr = BASE.get(id);
+  if (!pr) return null;
+  const color = cad.color !== undefined && pr.paintable ? hex(cad.color) : undefined;
+  return { presetId: id, reason: "cad", ...(color ? { color } : {}) };
+}
+
+/** File-name key for an own texture: lower case, safe characters only. */
+export function textureKey(file: string) {
+  const t = file.normalize("NFC").toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss");
+  const dot = t.lastIndexOf(".");
+  const stem = (dot > 0 ? t.slice(0, dot) : t).replace(/[^a-z0-9-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "textur";
+  const ext = dot > 0 ? t.slice(dot + 1).replace(/[^a-z0-9]/g, "").slice(0, 5) : "";
+  return ext ? `${stem}.${ext}` : stem;
+}
+/** Storage id (letters, digits, - and _ only) for a texture key. */
+export const textureDocId = (key: string) => `tex-${key.replace(/\./g, "_")}`.slice(0, 64);
 
 /** Box-projected texture coordinates in metres (texture scale is applied by the material). */
 export function boxUVs(positions: Float32Array, normals: Float32Array): Float32Array {

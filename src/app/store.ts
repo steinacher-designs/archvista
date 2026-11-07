@@ -4,7 +4,9 @@ import { create } from "zustand";
 import type { ImportedModel } from "../core/dxf/import";
 import type { PreparedScene } from "../core/scene";
 import { autoDesign, newProject, sha256Hex, type Project } from "../core/project";
-import { PRESET } from "../core/materials";
+import { PRESET, textureKey, setCustomPresets, type MaterialPreset } from "../core/materials";
+import { unzip, baseName, ZipError } from "../core/unzip";
+import { saveTexture } from "./textures";
 import { platform } from "./platform";
 import type { WorkerIn, WorkerOut } from "./worker";
 import { STRINGS, type Strings } from "./i18n";
@@ -39,7 +41,7 @@ interface State {
   setTab(t: Tab): void;
   setAutoMode(b: boolean): void;
   openFile(file: File): Promise<void>;
-  openBytes(bytes: Uint8Array, fileName: string, existing?: Project): Promise<void>;
+  openBytes(bytes: Uint8Array, fileName: string, existing?: Project, images?: { name: string; data: Uint8Array }[]): Promise<void>;
   reprocess(unitsToMeters: number): Promise<void>;
   /** Change the project. Discrete edits create an undo step; `coalesce` merges rapid edits (typing). */
   update(fn: (p: Project) => void, opts?: { coalesce?: string }): void;
@@ -54,7 +56,7 @@ let lastCoalesce: { key: string; at: number } | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 function automatic(project: Project, scene: PreparedScene, model: ModelMeta): Project {
-  const roof = scene.parts.filter((p) => p.category === "roof").map((p) => project.materialOverrides[p.key] ?? p.auto.presetId);
+  const roof = scene.parts.filter((p) => p.category === "roof").map((p) => (project.materialOverrides[p.key] ?? p.auto.presetId).split("~")[0]);
   const footprint = (model.bbox.max[0] - model.bbox.min[0]) * (model.bbox.max[2] - model.bbox.min[2]);
   const d = autoDesign({
     terrain: scene.parts.some((p) => p.category === "terrain"),
@@ -98,22 +100,42 @@ export const useStore = create<State>((set, get) => ({
   setAutoMode(b) { localStorage.setItem("av-auto", b ? "1" : "0"); set({ autoMode: b }); },
 
   async openFile(file) {
+    const de = get().lang === "de";
+    if (/\.zip$/i.test(file.name)) {
+      // DXF + texture images in one ZIP
+      try {
+        const keep = (n: string) => !n.startsWith("__MACOSX/") && /\.(dxf|jpe?g|png|webp)$/i.test(n);
+        const entries = await unzip(new Uint8Array(await file.arrayBuffer()), keep);
+        const dxfs = entries.filter((e) => /\.dxf$/i.test(e.name)).sort((a, b) => b.data.length - a.data.length);
+        if (!dxfs.length) { set({ screen: "failed", error: { message: de ? "Im ZIP wurde keine .dxf-Datei gefunden." : "No .dxf file found in the ZIP." } }); return; }
+        const images = entries.filter((e) => !/\.dxf$/i.test(e.name)).map((e) => ({ name: baseName(e.name), data: e.data }));
+        await get().openBytes(dxfs[0].data, baseName(dxfs[0].name), undefined, images);
+      } catch (err) {
+        set({ screen: "failed", error: { message: err instanceof ZipError ? err.message : (de ? "Das ZIP konnte nicht gelesen werden." : "Could not read the ZIP.") } });
+      }
+      return;
+    }
     if (!/\.dxf$/i.test(file.name)) {
-      set({ screen: "failed", error: { message: get().lang === "de" ? "Bitte eine .dxf-Datei verwenden. DWG-Dateien bitte in AutoCAD mit _DXFOUT als DXF speichern." : "Please use a .dxf file. Save DWG files as DXF in AutoCAD with _DXFOUT." } });
+      set({ screen: "failed", error: { message: de ? "Bitte eine .dxf-Datei (oder ein ZIP mit DXF und Texturbildern) verwenden. DWG-Dateien bitte in AutoCAD mit _DXFOUT als DXF speichern." : "Please use a .dxf file (or a ZIP with DXF and texture images). Save DWG files as DXF in AutoCAD with _DXFOUT." } });
       return;
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
     await get().openBytes(bytes, file.name);
   },
 
-  async openBytes(bytes, fileName, existing) {
+  async openBytes(bytes, fileName, existing, images) {
     set({ screen: "processing", error: null, progress: { fraction: 0.01, label: "" }, dxf: bytes, fileName, startedAt: performance.now(), timings: {} });
     const hash = existing?.fileHash ?? (await sha256Hex(bytes));
     const res = await runWorker({ type: "process", dxf: bytes.slice().buffer, unitsToMeters: existing?.unitsToMeters }, (f, label) => set({ progress: { fraction: f, label } }));
     if (res.type === "error") { set({ screen: "failed", error: { message: res.message, detail: res.detail } }); return; }
     if (res.type !== "done") return;
     if (!res.model.ok) { set({ screen: "failed", model: res.model, error: { message: res.model.warnings[0]?.message ?? get().t.noGeometry, detail: res.model.warnings[0]?.detail } }); return; }
-    let project = existing ?? automatic(newProject(fileName, hash), res.scene, res.model);
+    // materials with own texture images (ZIP import), kept with the project for later sessions
+    let customs = existing?.customMaterials;
+    if (images?.length) customs = await cadTextures(existing?.id ?? newProject(fileName, hash).id, res.model, images);
+    applyCadTextures(res.scene, customs);
+    noteMissingTextures(res.model, customs, !!images?.length, get().lang);
+    let project = existing ?? automatic({ ...newProject(fileName, hash), ...(customs?.length ? { customMaterials: customs } : {}) }, res.scene, res.model);
     project = { ...project, language: project.language ?? get().lang };
     set({ model: res.model, scene: res.scene, project, past: [], future: [], screen: "work", step: "customize", timings: res.timings });
     void platform.saveProject(project, existing ? undefined : bytes);
@@ -164,6 +186,57 @@ export const useStore = create<State>((set, get) => ({
   goHome() { set({ screen: "home", scene: null, model: null, project: null, dxf: null, past: [], future: [] }); },
   addTiming(k, ms) { set((s) => ({ timings: { ...s.timings, [k]: ms } })); },
 }));
+
+/** Saves the ZIP's images that CAD materials refer to and creates one material per CAD material. */
+async function cadTextures(projectId: string, model: ModelMeta, images: { name: string; data: Uint8Array }[]): Promise<MaterialPreset[]> {
+  const byName = new Map(images.map((i) => [i.name.toLowerCase(), i]));
+  const out: MaterialPreset[] = [];
+  const saved = new Set<string>();
+  for (const cm of model.materials ?? []) {
+    const img = cm.map ? byName.get(cm.map.toLowerCase()) : undefined;
+    if (!img) continue;
+    const key = textureKey(img.name);
+    if (!saved.has(key)) { await saveTexture(projectId, key, img.data); saved.add(key); }
+    out.push({
+      id: `img:${textureKey(cm.name).replace(/\./g, "_")}`, label: { de: cm.name, en: cm.name },
+      color: cm.color !== undefined ? "#" + cm.color.toString(16).padStart(6, "0") : "#b9b9b9",
+      roughness: 0.8, metalness: 0, texture: "none", scale: cm.mapSize && cm.mapSize > 0.01 && cm.mapSize < 100 ? cm.mapSize : 1,
+      group: "cad", image: key, cadName: cm.name,
+      ...(cm.opacity !== undefined ? { transmission: 1, opacity: cm.opacity } : {}),
+    });
+  }
+  return out;
+}
+
+/** Parts whose CAD material has an own texture use it automatically. */
+function applyCadTextures(scene: PreparedScene, customs: MaterialPreset[] | undefined) {
+  setCustomPresets(customs);
+  if (!customs?.length) return;
+  const byCad = new Map(customs.map((c) => [c.cadName, c.id]));
+  for (const p of scene.parts) {
+    const id = p.cadMaterial ? byCad.get(p.cadMaterial) : undefined;
+    if (id) p.auto = { presetId: id, reason: "cad" };
+  }
+}
+
+/** Honest note when the drawing names texture images that are not available. */
+function noteMissingTextures(model: ModelMeta, customs: MaterialPreset[] | undefined, hadZip: boolean, lang: "de" | "en") {
+  const withMap = (model.materials ?? []).filter((m) => m.map);
+  const have = new Set((customs ?? []).map((c) => c.cadName));
+  const missing = withMap.filter((m) => !have.has(m.name));
+  if (!missing.length) return;
+  const files = [...new Set(missing.map((m) => m.map!))];
+  const unsupported = files.filter((f) => !/\.(jpe?g|png|webp)$/i.test(f));
+  const de = lang === "de";
+  const list = files.slice(0, 4).join(", ") + (files.length > 4 ? " …" : "");
+  model.warnings.push({
+    code: "cad-textures",
+    message: hadZip
+      ? (de ? `${files.length} Texturbild(er) aus der Zeichnung fehlen im ZIP (${list}). Diese Flächen bekommen ein passendes ARCHVISTA-Material.` : `${files.length} texture image(s) named in the drawing are missing from the ZIP (${list}). Those surfaces get a matching ARCHVISTA material.`)
+        + (unsupported.length ? (de ? ` ${unsupported.length} davon (z. B. TIF/BMP) bitte als JPG oder PNG speichern.` : ` ${unsupported.length} of them (e.g. TIF/BMP) need saving as JPG or PNG.`) : "")
+      : (de ? `Die Zeichnung verwendet ${files.length} Texturbild(er) (${list}). Um sie zu übernehmen: DXF und Bilder zusammen als ZIP importieren.` : `The drawing uses ${files.length} texture image(s) (${list}). To use them, import the DXF together with the images as a ZIP.`),
+  } as ModelMeta["warnings"][number]);
+}
 
 function runWorker(msg: WorkerIn, onProgress: (f: number, label: string) => void): Promise<WorkerOut> {
   return new Promise((resolve) => {

@@ -1,6 +1,6 @@
 // ARCHVISTA — public import API: DXF text → web-ready indexed meshes in metres (Y-up).
 
-import { readDxf, num } from "./reader";
+import { readDxf, num, type RawMaterial } from "./reader";
 import { buildGeometry, BuildResult } from "./build";
 
 export type UnitSource = "header" | "guess" | "user";
@@ -18,6 +18,8 @@ export interface ModelMesh {
   id: string;
   layer: string;
   color: number;
+  /** CAD material name, if the drawing assigns one. */
+  material?: string;
   positions: Float32Array; // metres, Y-up, relative to origin
   normals: Float32Array;
   indices: Uint32Array;
@@ -36,8 +38,22 @@ export interface ImportWarning {
   detail?: string;
 }
 
+/** A material defined in the CAD file (only those actually used by geometry). */
+export interface CadMaterial {
+  name: string;
+  description?: string;
+  /** 0xRRGGBB, when the material sets its own colour */
+  color?: number;
+  /** texture file name only (no folders), e.g. "Ziegel_rot.jpg" */
+  map?: string;
+  /** metres per texture tile, if the file says so */
+  mapSize?: number;
+  opacity?: number;
+}
+
 export interface ImportedModel {
   meshes: ModelMesh[];
+  materials: CadMaterial[];
   layers: LayerInfo[];
   units: UnitInfo;
   /** World offset (metres, Y-up) subtracted from all positions to keep float precision. */
@@ -97,7 +113,7 @@ export function importDxf(text: string, opts: ImportOptions = {}): ImportedModel
   progress(0.3, "Geometrie wird rekonstruiert");
   const built = buildGeometry(raw);
   progress(0.6, "Modell wird optimiert");
-  return finalize(built, raw.header.get("$INSUNITS"), raw.version, opts, progress);
+  return finalize(built, raw.header.get("$INSUNITS"), raw.version, opts, progress, raw.materials);
 }
 
 function finalize(
@@ -105,7 +121,8 @@ function finalize(
   insunitsPairs: [number, string][] | undefined,
   version: string | undefined,
   opts: ImportOptions,
-  progress: (f: number, l: string) => void
+  progress: (f: number, l: string) => void,
+  rawMaterials: Map<string, RawMaterial> = new Map()
 ): ImportedModel {
   const warnings: ImportWarning[] = [];
 
@@ -205,6 +222,7 @@ function finalize(
       id: `m${gi++}`,
       layer: g.layer,
       color: g.color,
+      ...(g.material ? { material: g.material } : {}),
       positions,
       normals: split.normals,
       indices,
@@ -244,9 +262,25 @@ function finalize(
       detail: b.acis.length ? "acis-fix" : undefined,
     });
   }
+  // CAD materials actually used by the geometry
+  const usedNames = new Set(meshes.map((m) => m.material).filter(Boolean) as string[]);
+  const materials: CadMaterial[] = [];
+  for (const rm of rawMaterials.values()) {
+    if (!usedNames.has(rm.name) || materials.some((x) => x.name === rm.name)) continue;
+    const file = rm.diffuseMap?.split(/[\\/]/).pop()?.trim();
+    materials.push({
+      name: rm.name,
+      ...(rm.description ? { description: rm.description } : {}),
+      ...(rm.diffuse !== undefined ? { color: rm.diffuse } : {}),
+      ...(file ? { map: file } : {}),
+      ...(rm.mapScaleU ? { mapSize: rm.mapScaleU * units.toMeters } : {}),
+      ...(rm.opacity !== undefined && rm.opacity < 1 ? { opacity: rm.opacity } : {}),
+    });
+  }
   progress(1, "Fertig");
   return {
     meshes,
+    materials,
     layers: [...layerMap.values()].sort((a, c) => c.triangleCount - a.triangleCount),
     units,
     origin,

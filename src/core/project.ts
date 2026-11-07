@@ -1,4 +1,5 @@
 // ARCHVISTA — project document (everything the user can change; saved automatically).
+import type { MaterialPreset } from "./materials";
 
 import type { Zone } from "./zones";
 
@@ -78,6 +79,8 @@ export interface Project {
   materialOverrides: Record<string, string>; // part key → preset id
   /** Optional user colour per part key (hex). */
   materialColors?: Record<string, string>;
+  /** Materials with own texture images, taken from the CAD file's ZIP (id "img:…"). */
+  customMaterials?: MaterialPreset[];
   viewpoints: Viewpoint[];
   /** User-defined places, shown after the storeys. */
   places?: Place[];
@@ -102,13 +105,13 @@ export const ENVIRONMENTS: { id: EnvironmentId; de: string; en: string }[] = [
 
 export const TEMPLATES: { id: TemplateId; de: string; en: string; accent: string }[] = [
   { id: "minimal", de: "Minimal", en: "Minimal", accent: "#1f1f1f" },
-  { id: "portfolio", de: "Atelier", en: "Atelier", accent: "#b8673b" },
+  { id: "portfolio", de: "Atelier", en: "Atelier", accent: "#B57056" },
   { id: "dark-luxury", de: "Noir", en: "Noir", accent: "#c9a96e" },
   { id: "cinema", de: "Kino", en: "Cinema", accent: "#ff5a36" },
   { id: "swiss", de: "Swiss", en: "Swiss", accent: "#e3000f" },
   { id: "nature", de: "Papier", en: "Paper", accent: "#6d7f4f" },
   { id: "monograph", de: "Monografie", en: "Monograph", accent: "#8a6d4b" },
-  { id: "studio", de: "Studio", en: "Studio", accent: "#4f8cff" },
+  { id: "studio", de: "Studio", en: "Studio", accent: "#8f9fd8" },
   { id: "blueprint", de: "Plan", en: "Blueprint", accent: "#7fd1ff" },
   { id: "beton", de: "Beton", en: "Concrete", accent: "#e8501c" },
 ];

@@ -1,7 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { getViewer } from "../useViewer";
 import { useStore, type Tab, presetLabel } from "../store";
 import { ENVIRONMENTS, TEMPLATES, type Lighting, type Quality, type EnvironmentId, type TemplateId } from "../../core/project";
-import { PRESETS, PRESET, GROUP_LABEL, type MaterialGroup } from "../../core/materials";
+import { PRESETS, PRESET, GROUP_LABEL, customPresets, setCustomPresets, type MaterialGroup, type MaterialPreset } from "../../core/materials";
+import { textureUrl } from "../textures";
 import { CATEGORY_LABEL } from "../../core/analysis/classify";
 import { UNIT_CHOICES } from "../../core/dxf/import";
 import { AreasEditor } from "./Areas";
@@ -82,7 +84,7 @@ const M = "linear-gradient(180deg,#9db6cc 0 55%,#a9b59a 55%)";
 const box = (st: React.CSSProperties) => <i className="wf" style={st} />;
 const WF: Record<TemplateId, React.ReactNode> = {
   minimal: <>{box({ background: "#151515", height: 4, width: "35%" })}{box({ background: M, height: 52, borderRadius: 3 })}{box({ background: "#151515", height: 6, width: "45%" })}</>,
-  portfolio: <div className="wfg" style={{ gridTemplateColumns: "34% 1fr" }}><div className="wfc">{box({ background: "#b8673b", height: 3, width: "40%" })}{box({ background: "#1d1c1a", height: 7, width: "85%" })}{box({ background: "#cfc8bd", height: 3 })}{box({ background: "#cfc8bd", height: 3, width: "70%" })}</div>{box({ background: M, height: "100%" })}</div>,
+  portfolio: <div className="wfg" style={{ gridTemplateColumns: "34% 1fr" }}><div className="wfc">{box({ background: "#B57056", height: 3, width: "40%" })}{box({ background: "#1d1c1a", height: 7, width: "85%" })}{box({ background: "#cfc8bd", height: 3 })}{box({ background: "#cfc8bd", height: 3, width: "70%" })}</div>{box({ background: M, height: "100%" })}</div>,
   "dark-luxury": <div style={{ position: "relative", height: "100%", background: M, borderRadius: 3 }}><i style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,rgba(12,12,13,.85),transparent 60%)" }} /><i className="wf" style={{ position: "absolute", left: 7, top: 8, background: "#c9a96e", height: 2, width: 18 }} /><i className="wf" style={{ position: "absolute", left: 7, top: 14, background: "#ece7dd", height: 7, width: "55%" }} /></div>,
   cinema: <div style={{ position: "relative", height: "100%", background: M, borderRadius: 3 }}><i className="wf" style={{ position: "absolute", left: 7, top: 7, background: "#fff", height: 4, width: "30%" }} /><i className="wf" style={{ position: "absolute", right: 6, top: 5, background: "#ff5a36", height: 8, width: 18, borderRadius: 6 }} /></div>,
   swiss: <><div style={{ display: "flex", gap: 4, alignItems: "center" }}>{box({ background: "#e3000f", height: 6, width: 6 })}{box({ background: "#111", height: 2, flex: 1 })}</div>{box({ background: "#111", height: 15, width: "80%" })}{box({ background: M, height: 40 })}</>,
@@ -95,7 +97,7 @@ const WF: Record<TemplateId, React.ReactNode> = {
 
 function Design() {
   const { t, project, update, lang } = useStore();
-  const accents = ["#1f1f1f", "#c9a96e", "#e3000f", "#5b4cff", "#6d7f4f", "#ff5a36", "#1e6f8c", "#b8673b"];
+  const accents = ["#1f1f1f", "#475480", "#B57056", "#7F3B25", "#A7993C", "#DCCD8B", "#c9a96e", "#e3000f"];
   return (
     <>
       <div className="tiles">
@@ -144,47 +146,111 @@ function Texts() {
   );
 }
 
+/** Picture for a material: photo texture where there is one, otherwise its colour. */
+function thumbFor(id: string, colour?: string) {
+  const pr = PRESET.get(id);
+  if (!pr) return colour ?? "#ccc";
+  const c = colour ?? pr.color;
+  if (pr.texture === "none" || pr.paintable) return c;
+  return `url(/assets-lib/tex/${pr.tex ?? id}_col.webp) center/cover, ${c}`;
+}
+
+/** Swatch that can also show an own texture image (stored with the project). */
+function Swatch({ id, colour, className }: { id: string; colour?: string; className: string }) {
+  const projectId = useStore((s) => s.project?.id);
+  const pr = PRESET.get(id);
+  const [img, setImg] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    if (pr?.image && projectId) void textureUrl(projectId, pr.image).then((u) => { if (alive) setImg(u); });
+    else setImg(null);
+    return () => { alive = false; };
+  }, [pr?.image, projectId]);
+  const bg = img ? `url(${img}) center/cover, ${colour ?? pr?.color ?? "#ccc"}` : thumbFor(id, colour);
+  return <span className={className} style={{ background: bg }} />;
+}
+
 function Materials() {
   const { t, scene, project, update, lang } = useStore();
+  const de = lang === "de";
+  const [open, setOpen] = useState<string | null>(null);
+  setCustomPresets(project!.customMaterials);
+  const cadList: MaterialPreset[] = customPresets();
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const groups = useMemo(() => {
-    const m = new Map<string, { key: string; layer: string; category: string; role: string; auto: string; reason: string; color: number; tris: number }>();
+    const m = new Map<string, { key: string; layer: string; category: string; role: string; auto: string; autoColor?: string; cad?: string; reason: string; color: number; tris: number }>();
     for (const p of scene!.parts) {
       const g = m.get(p.key);
       if (g) g.tris += p.indices.length / 3;
-      else m.set(p.key, { key: p.key, layer: p.layer, category: p.category, role: p.role, auto: p.auto.presetId, reason: p.auto.reason, color: p.color, tris: p.indices.length / 3 });
+      else m.set(p.key, { key: p.key, layer: p.layer, category: p.category, role: p.role, auto: p.auto.presetId, autoColor: p.auto.color, cad: p.cadMaterial, reason: p.auto.reason, color: p.color, tris: p.indices.length / 3 });
     }
     return [...m.values()].sort((a, b) => b.tris - a.tris);
   }, [scene]);
-  const basis: Record<string, string> = { layer: t.basisLayer, colour: t.basisColour, geometry: t.basisGeometry, default: t.basisDefault };
-  const roleName: Record<string, string> = lang === "de" ? { top: "Oberseite", under: "Unterseite", side: "Kante", all: "" } : { top: "top", under: "underside", side: "edge", all: "" };
+  // click on a surface in the 3D view → open its row
+  useEffect(() => {
+    const v = getViewer();
+    v?.setPartPickHandler((key) => {
+      setOpen(key);
+      requestAnimationFrame(() => rowRefs.current.get(key)?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+    });
+    return () => { v?.setPartPickHandler(null); v?.highlight(null); };
+  }, []);
+  // opening a part flashes it in 3D, then the real material is visible again
+  useEffect(() => {
+    if (!open) return;
+    getViewer()?.highlight(open);
+    const id = setTimeout(() => getViewer()?.highlight(null), 1300);
+    return () => clearTimeout(id);
+  }, [open]);
+  const basis: Record<string, string> = { layer: t.basisLayer, colour: t.basisColour, geometry: t.basisGeometry, default: t.basisDefault, cad: de ? "aus CAD-Material" : "from CAD material" };
+  const roleName: Record<string, string> = de ? { top: "Oberseite", under: "Unterseite", side: "Kante", all: "" } : { top: "top", under: "underside", side: "edge", all: "" };
+  const cat = (c: string) => CATEGORY_LABEL[c as keyof typeof CATEGORY_LABEL]?.[lang] ?? c;
+  const setMat = (key: string, auto: string, id: string) => update((p) => { if (id === auto) delete p.materialOverrides[key]; else p.materialOverrides[key] = id; });
   return (
     <>
-      <p className="intro">{t.materialsIntro}</p>
+      <p className="intro">{de ? "Klicke im 3D-Bild auf eine Fläche – oder wähle unten ein Bauteil. Die Änderung ist sofort sichtbar." : "Click a surface in the 3D view – or pick a part below. Changes show instantly."}</p>
       {groups.map((g) => {
         const cur = project!.materialOverrides[g.key] ?? g.auto;
-        const colour = project!.materialColors?.[g.key];
-        const pr = PRESET.get(cur)!;
-        const thumb = pr.texture !== "none" ? `url(/assets-lib/tex/${cur}_col.webp) center/180% , ${colour ?? pr.color}` : colour ?? pr.color;
+        const userColour = project!.materialColors?.[g.key];
+        const colour = userColour ?? (project!.materialOverrides[g.key] ? undefined : g.autoColor);
+        const isOpen = open === g.key;
+        const same = groups.filter((x) => x.category === g.category && x.key !== g.key);
         return (
-          <div className="mat" key={g.key}>
-            <div className="swatch" style={{ background: thumb, boxShadow: colour ? `inset 0 0 0 40px ${colour}55` : undefined }} />
-            <div>
-              <b>{g.layer} {roleName[g.role] ? `· ${roleName[g.role]}` : ""}</b>
-              <small>{CATEGORY_LABEL[g.category as keyof typeof CATEGORY_LABEL]?.[lang]} · {project!.materialOverrides[g.key] || colour ? t.basisUser : basis[g.reason]}</small>
-              <div className="matrow">
-                <select className="select" value={cur} onChange={(e) => update((p) => { if (e.target.value === g.auto) delete p.materialOverrides[g.key]; else p.materialOverrides[g.key] = e.target.value; })}>
-                  {(Object.keys(GROUP_LABEL) as MaterialGroup[]).map((grp) => (
-                    <optgroup key={grp} label={GROUP_LABEL[grp][lang]}>
-                      {PRESETS.filter((x) => x.group === grp).map((x) => <option key={x.id} value={x.id}>{presetLabel(x.id, lang)}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-                <label className="colorpick" title={lang === "de" ? "Eigene Farbe" : "Own colour"}>
-                  <input type="color" value={colour ?? pr.color} onChange={(e) => update((p) => { p.materialColors = { ...(p.materialColors ?? {}), [g.key]: e.target.value }; }, { coalesce: "col-" + g.key })} />
-                </label>
-                {colour && <button className="iconbtn" title={lang === "de" ? "Farbe zurücksetzen" : "Reset colour"} onClick={() => update((p) => { if (p.materialColors) delete p.materialColors[g.key]; })}>×</button>}
+          <div className={`mrow ${isOpen ? "open" : ""}`} key={g.key} ref={(el) => { if (el) rowRefs.current.set(g.key, el); else rowRefs.current.delete(g.key); }}
+            onMouseLeave={() => getViewer()?.highlight(null)}>
+            <button className="mhead" onMouseEnter={() => getViewer()?.highlight(g.key)} onClick={() => setOpen(isOpen ? null : g.key)} aria-expanded={isOpen} data-testid={`mat-${g.key}`}>
+              <Swatch className="swatch" id={cur} colour={colour} />
+              <span className="mt"><b>{cat(g.category)}{roleName[g.role] ? ` · ${roleName[g.role]}` : ""}</b><small>{g.cad ? `${g.cad} · ` : ""}{g.layer} · {project!.materialOverrides[g.key] || userColour ? t.basisUser : basis[g.reason]}</small></span>
+              <span className="mname">{presetLabel(cur, lang)}</span>
+            </button>
+            {isOpen && (
+              <div className="mpick">
+                {(Object.keys(GROUP_LABEL) as MaterialGroup[]).filter((grp) => grp !== "cad" || cadList.length).map((grp) => (
+                  <div key={grp}>
+                    <div className="mgl">{GROUP_LABEL[grp][lang]}</div>
+                    <div className="mtiles">
+                      {(grp === "cad" ? cadList : PRESETS.filter((x) => x.group === grp)).map((x) => (
+                        <button key={x.id} className={`mtile ${x.id === cur.split("~")[0] ? "on" : ""}`} onClick={() => setMat(g.key, g.auto, x.id)} title={presetLabel(x.id, lang)} data-testid={`tile-${x.id}`}>
+                          <Swatch className="im" id={x.id} />
+                          <span className="nm">{presetLabel(x.id, lang)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="mfoot">
+                  <label className="colorpick" title={de ? "Eigene Farbe" : "Own colour"}>
+                    <input type="color" value={colour ?? PRESET.get(cur)?.color.slice(0, 7) ?? "#cccccc"} onChange={(e) => update((p) => { p.materialColors = { ...(p.materialColors ?? {}), [g.key]: e.target.value }; }, { coalesce: "col-" + g.key })} />
+                  </label>
+                  <span className="small">{userColour ? (de ? "Eigene Farbe" : "Own colour") : (de ? "Farbe ändern" : "Change colour")}</span>
+                  {userColour && <button className="btn small ghost" onClick={() => update((p) => { if (p.materialColors) delete p.materialColors[g.key]; })}>{de ? "Originalfarbe" : "Original colour"}</button>}
+                  {cur !== g.auto && <button className="btn small ghost" onClick={() => setMat(g.key, g.auto, g.auto)}>{de ? "Vorschlag" : "Suggestion"}: {presetLabel(g.auto, lang)}</button>}
+                  {same.length > 0 && <button className="btn small ghost" onClick={() => update((p) => { for (const x of same) { if (cur === x.auto) delete p.materialOverrides[x.key]; else p.materialOverrides[x.key] = cur; if (colour) p.materialColors = { ...(p.materialColors ?? {}), [x.key]: colour }; else if (p.materialColors) delete p.materialColors[x.key]; } })}>
+                    {de ? `Für alle ${cat(g.category)}-Teile (${same.length + 1})` : `Apply to all ${cat(g.category).toLowerCase()} parts (${same.length + 1})`}
+                  </button>}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         );
       })}

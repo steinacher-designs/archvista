@@ -1,9 +1,9 @@
 // ARCHVISTA — automatic scene preparation: import result → categorised, textured parts + analysis + suggestions.
 
-import type { ImportedModel, ModelMesh } from "./dxf/import";
+import type { CadMaterial, ImportedModel, ModelMesh } from "./dxf/import";
 import { Category, categoryFromLayer, classifyMesh, triNormalArea } from "./analysis/classify";
 import { analyse, SpatialAnalysis, cellOf } from "./analysis/spatial";
-import { assignMaterial, boxUVs, Role, Assignment } from "./materials";
+import { assignMaterial, assignFromCad, boxUVs, Role, Assignment } from "./materials";
 import type { Hotspot, Viewpoint } from "./project";
 
 export interface ScenePart {
@@ -15,6 +15,8 @@ export interface ScenePart {
   basis: "layer" | "geometry";
   role: Role;
   color: number;
+  /** CAD material name from the drawing, if any. */
+  cadMaterial?: string;
   positions: Float32Array;
   normals: Float32Array;
   uvs: Float32Array;
@@ -64,17 +66,23 @@ function orientationGroups(m: ModelMesh): Map<string, number[]> {
   return g;
 }
 
-export function partition(meshes: ModelMesh[]): ScenePart[] {
+export function partition(meshes: ModelMesh[], cadMaterials: CadMaterial[] = []): ScenePart[] {
   const parts: ScenePart[] = [];
+  const cad = new Map(cadMaterials.map((c) => [c.name, c]));
   let n = 0;
-  const make = (m: ModelMesh, sub: Omit<ModelMesh, "id" | "layer" | "color">, category: Category, basis: "layer" | "geometry", role: Role): ScenePart => ({
-    id: `p${n++}`,
-    key: `${m.layer}|${category}|${role}|${m.color}`,
-    layer: m.layer, category, basis, role, color: m.color,
-    positions: sub.positions, normals: sub.normals, indices: sub.indices,
-    uvs: boxUVs(sub.positions, sub.normals),
-    auto: assignMaterial(m.layer, category, role, m.color),
-  });
+  const make = (m: ModelMesh, sub: Omit<ModelMesh, "id" | "layer" | "color" | "material">, category: Category, basis: "layer" | "geometry", role: Role): ScenePart => {
+    const cm = m.material ? cad.get(m.material) ?? { name: m.material } : undefined;
+    return {
+      id: `p${n++}`,
+      // the CAD material is part of the key only when there is one (older projects keep their keys)
+      key: `${m.layer}|${category}|${role}|${m.color}${m.material ? `|m:${m.material}` : ""}`,
+      layer: m.layer, category, basis, role, color: m.color,
+      ...(m.material ? { cadMaterial: m.material } : {}),
+      positions: sub.positions, normals: sub.normals, indices: sub.indices,
+      uvs: boxUVs(sub.positions, sub.normals),
+      auto: (cm && assignFromCad(cm, category)) || assignMaterial(m.layer, category, role, m.color),
+    };
+  };
   for (const m of meshes) {
     const byLayer = categoryFromLayer(m.layer);
     if (byLayer && !SPLIT_ROLES.includes(byLayer)) { parts.push(make(m, m, byLayer, "layer", "all")); continue; }
@@ -105,7 +113,7 @@ export function partition(meshes: ModelMesh[]): ScenePart[] {
 
 export function prepareScene(model: ImportedModel, onProgress?: (f: number, label: string) => void): PreparedScene {
   const t0 = performance.now();
-  const parts = partition(model.meshes);
+  const parts = partition(model.meshes, model.materials);
   const t1 = performance.now();
   onProgress?.(0.4, "Räume und Geschosse werden erkannt");
   const asMeshes: ModelMesh[] = parts.map((p) => ({ id: p.id, layer: p.layer, color: p.color, positions: p.positions, normals: p.normals, indices: p.indices, triangleCount: p.indices.length / 3 }));

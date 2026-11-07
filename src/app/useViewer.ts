@@ -1,9 +1,12 @@
 // ARCHVISTA — keeps the live 3D view in sync with the project (incremental: only what changed is rebuilt).
 import { useEffect, useRef } from "react";
 import { ArchViewer } from "../viewer/viewer";
-import { publicConfig, publicParts } from "../core/export/public-scene";
+import { publicConfig, publicParts, partMaterialId } from "../core/export/public-scene";
 import type { PreparedScene } from "../core/scene";
 import type { Project, Hotspot } from "../core/project";
+import { resolvePreset, setCustomPresets, type MaterialPreset } from "../core/materials";
+import { useStore } from "./store";
+import { textureUrl } from "./textures";
 
 let current: ArchViewer | null = null;
 export const getViewer = () => current;
@@ -20,9 +23,11 @@ export function useViewer(host: React.RefObject<HTMLDivElement | null>, scene: P
     const v = new ArchViewer(host.current, {
       language: opts.lang, assetBase: "/assets-lib/", preserveDrawingBuffer: true,
       onHotspot: (h) => hsRef.current?.(h),
+      resolveImage: async (name) => { const id = useStore.getState().project?.id; return id ? textureUrl(id, name) : null; },
     });
     const cap = localStorage.getItem("av-maxfps"); if (cap !== null) v.maxFps = Number(cap);
     viewer.current = v; current = v;
+    (window as unknown as { __archvistaViewer?: ArchViewer }).__archvistaViewer = v; // test hook
     return () => { v.dispose(); viewer.current = null; current = null; };
   }, [host]);
 
@@ -32,19 +37,41 @@ export function useViewer(host: React.RefObject<HTMLDivElement | null>, scene: P
     v?.setPickHandler(opts.onPick ? (p) => pickRef.current?.(p) : null);
   }, [!!opts.onPick]);
 
-  // geometry: rebuild when the scene, hidden areas or materials change
+  // geometry: rebuild when the scene or hidden areas change (camera stays put unless it is a new model)
   const greyKey = project ? JSON.stringify(project.zones.filter((z) => z.kind === "grey")) : "";
-  const matKey = project ? JSON.stringify([project.materialOverrides, project.materialColors]) : "";
+  const builtFor = useRef<unknown>(null);
   useEffect(() => {
     const v = viewer.current;
     if (!v || !scene || !project) return;
     const id = setTimeout(() => {
-      const pp = publicParts(scene, project);
-      const cfg = publicConfig(scene, project, new Set(pp.parts.map((p) => p.presetId)));
-      v.setBuilding(pp.parts, cfg);
+      const pr = useStore.getState().project ?? project;
+      const pp = publicParts(scene, pr);
+      const cfg = publicConfig(scene, pr, new Set(pp.parts.map((p) => p.presetId)));
+      v.setBuilding(pp.parts, cfg, { keepView: builtFor.current === scene });
+      builtFor.current = scene;
     }, 60);
     return () => clearTimeout(id);
-  }, [scene, greyKey, matKey]);
+  }, [scene, greyKey]);
+
+  // materials: swapped in place — instant, no rebuild, no camera jump
+  const matKey = project ? JSON.stringify([project.materialOverrides, project.materialColors, project.customMaterials]) : "";
+  useEffect(() => {
+    const v = viewer.current;
+    if (!v || !scene || !project || builtFor.current !== scene) return;
+    const byKey = new Map<string, string>();
+    const mats: Record<string, MaterialPreset> = {};
+    setCustomPresets(project.customMaterials);
+    for (const p of scene.parts) {
+      const id = partMaterialId(p, project);
+      byKey.set(p.key, id);
+      const pr = resolvePreset(id);
+      if (pr) mats[id] = pr;
+    }
+    if (!v.setPartMaterials(byKey, mats)) {
+      const pp = publicParts(scene, project);
+      v.setBuilding(pp.parts, publicConfig(scene, project, new Set(pp.parts.map((p) => p.presetId))), { keepView: true });
+    }
+  }, [matKey]);
 
   // light-weight updates
   useEffect(() => { if (project) viewer.current?.setEnvironment(project.environment); }, [project?.environment]);

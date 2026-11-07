@@ -18,6 +18,8 @@ export interface SiteInput {
   readAsset: AssetReader;
   /** Downloads (plans, details …) with their bytes. */
   documents?: { doc: ProjectDocument; data: Uint8Array }[];
+  /** Own texture images (from the CAD file's ZIP), by file name. */
+  textures?: { name: string; data: Uint8Array }[];
 }
 
 /** Safe, readable path segment (keeps German umlauts readable, removes everything risky). */
@@ -170,6 +172,9 @@ export async function generateSite(input: SiteInput): Promise<FileMap> {
     const inSite = [...files.keys()].some((f) => f.includes(`/${kk}.`) || f.includes(`/${kk}_`));
     if (inSite) used[k] = v;
   }
+  // own texture images used by the published materials
+  const usedImages = new Set(Object.values(pub.config.materials).map((m) => m.image).filter(Boolean) as string[]);
+  for (const tx of input.textures ?? []) if (usedImages.has(tx.name)) files.set(`assets/tex-user/${tx.name}`, tx.data);
   // images of info points (shown inside the 3D view); the pages themselves carry no rendered stills
   for (const [k, v] of hsImages) files.set(k, v);
   // downloads (plans, details …) — real files, same structure as the user's folders

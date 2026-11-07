@@ -28,13 +28,39 @@ await step("plans: add files", async () => {
   await p.locator(".zlist li").nth(1).waitFor({ timeout: 10000 });
   await p.screenshot({ path: outDir + "/plans.png", timeout: 180000 });
 });
-await step("materials: grouped picker", async () => {
+await step("materials: visual picker, instant change, camera stays", async () => {
   await p.getByTestId("tab-materials").click();
-  const groups = await p.locator(".mat select").first().locator("optgroup").count();
-  const opts = await p.locator(".mat select").first().locator("option").count();
-  if (groups < 7 || opts < 45) throw new Error(`groups ${groups} options ${opts}`);
-  res.push(`  ${groups} groups, ${opts} materials`);
+  await p.locator(".mhead").first().click();
+  const groups = await p.locator(".mgl").count(), tiles = await p.locator(".mtile").count();
+  if (groups < 7 || tiles < 45) throw new Error(`groups ${groups} tiles ${tiles}`);
+  res.push(`  ${groups} groups, ${tiles} materials`);
+  const cam = () => p.evaluate(() => { const c = window.__av?.camera; return c ? c.position.toArray().map((v) => v.toFixed(3)).join(",") : ""; });
+  await p.evaluate(() => { window.__av = window.__archvistaViewer; });
+  await p.mouse.move(500, 400); await p.mouse.down(); await p.mouse.move(560, 430, { steps: 6 }); await p.mouse.up(); // orbit a bit
+  let before = await cam();
+  for (let i = 0; i < 40; i++) { await p.waitForTimeout(4500); const c = await cam(); if (c === before) break; before = c; } // wait until the camera rests
+  const target = p.locator(".mtile:not(.on)").nth(3);
+  const id = (await target.getAttribute("data-testid")).slice(5);
+  await target.click();
+  await p.waitForTimeout(6000);
+  const after = await cam();
+  const dist = Math.hypot(...before.split(",").map((v, i) => +v - +after.split(",")[i]));
+  if (dist > 0.1) throw new Error(`camera jumped ${dist.toFixed(2)} m: ${before} → ${after}`);
+  const used = await p.evaluate((id) => { let n = 0; window.__av.scene.traverse((o) => { if (o.isMesh && o.userData.presetId === id) n++; }); return n; }, id);
+  if (!used) throw new Error("material not applied in 3D");
+  res.push(`  ${id} applied to ${used} mesh(es), camera stayed (${dist.toFixed(3)} m)`);
   await p.screenshot({ path: outDir + "/materials.png", timeout: 180000 });
+  // click a surface in 3D → its row opens
+  await p.locator(".mhead").first().click(); // close
+  const box = await p.getByTestId("viewer").boundingBox();
+  let opened = null;
+  for (const [fx, fy] of [[0.5, 0.5], [0.45, 0.55], [0.55, 0.45], [0.5, 0.6]]) {
+    await p.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
+    await p.waitForTimeout(2500);
+    if (await p.locator(".mrow.open").count()) { opened = await p.locator(".mrow.open .mhead b").textContent(); break; }
+  }
+  if (!opened) throw new Error("click on the model did not open a part");
+  res.push(`  click on model opened: ${opened}`);
 });
 res.push("page errors: " + (errs.length ? errs.join(" | ") : "none"));
 console.log(res.join("\n")); await b.close(); srv.close();

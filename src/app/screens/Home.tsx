@@ -28,12 +28,13 @@ export function Home() {
           <h2>{t.dropTitle}</h2>
           <p>{t.dropOr}</p>
           <button className="btn brand big" onClick={() => input.current?.click()}>{t.chooseFile}</button>
-          <input ref={input} type="file" accept=".dxf" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void openFile(f); e.target.value = ""; }} data-testid="file" />
+          <input ref={input} type="file" accept=".dxf,.zip" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void openFile(f); e.target.value = ""; }} data-testid="file" />
           <label className="auto">
             <input type="checkbox" checked={autoMode} onChange={(e) => setAutoMode(e.target.checked)} />
             <span><b>{t.autoMode}</b><small>{t.autoModeHint}</small></span>
           </label>
           <div className="helpbox"><button className="link" onClick={() => setHelp(true)}>{t.exportHelp}</button></div>
+          <MaterialGuide />
         </div>
         <div className="recent">
           <h3>{t.recent}</h3>
@@ -52,6 +53,32 @@ export function Home() {
       <footer className="credit">ARCHVISTA {__APP_VERSION__} · {useStore.getState().lang === "de" ? "entwickelt von" : "developed by"} <b>Judith Steinacher</b></footer>
       {help && <ExportHelp onClose={() => setHelp(false)} />}
     </div>
+  );
+}
+
+/** Small, collapsible how-to: bring materials (and texture images) over from AutoCAD. */
+function MaterialGuide() {
+  const de = useStore((s) => s.lang) === "de";
+  return (
+    <details className="guide" onClick={(e) => e.stopPropagation()}>
+      <summary>{de ? "Materialien aus AutoCAD übernehmen" : "Bring materials over from AutoCAD"}</summary>
+      {de ? (
+        <ol>
+          <li>Materialien in AutoCAD wie gewohnt zuweisen – über den Materialbrowser (<b>_MATBROWSEROPEN</b>), pro Layer (<b>_MATERIALATTACH</b>) oder pro Objekt.</li>
+          <li>Mit <b>_DXFOUT</b> als DXF speichern. ARCHVISTA liest Materialnamen und -farben und wählt passende Oberflächen, z. B. „Ziegel“ → Klinker, „Eiche“ → Eichenparkett, „Glas“ → Glas.</li>
+          <li><b>Eigene Texturbilder:</b> DXF und Bilder (JPG oder PNG) in einen Ordner legen, Ordner mit Rechtsklick → „Senden an“ → „ZIP-komprimierter Ordner“ packen und das ZIP hierher ziehen. Die Bilder müssen so heißen wie in der Zeichnung.</li>
+          <li>Bilder aus der Autodesk-Materialbibliothek liegen meist unter <code>C:\Program Files (x86)\Common Files\Autodesk Shared\Materials\Textures</code> – die verwendeten von dort in den Ordner kopieren.</li>
+        </ol>
+      ) : (
+        <ol>
+          <li>Assign materials in AutoCAD as usual – in the Materials Browser (<b>_MATBROWSEROPEN</b>), per layer (<b>_MATERIALATTACH</b>) or per object.</li>
+          <li>Save as DXF with <b>_DXFOUT</b>. ARCHVISTA reads material names and colours and picks matching surfaces, e.g. “Brick” → brick, “Oak” → oak parquet, “Glass” → glass.</li>
+          <li><b>Own texture images:</b> put the DXF and the images (JPG or PNG) in one folder, right-click → “Send to” → “Compressed (zipped) folder”, and drop the ZIP here. Image names must match the drawing.</li>
+          <li>Images from the Autodesk material library are usually in <code>C:\Program Files (x86)\Common Files\Autodesk Shared\Materials\Textures</code> – copy the ones you use into the folder.</li>
+        </ol>
+      )}
+      <p>{de ? "Alles lässt sich danach unter „Anpassen → Materialien“ ändern." : "Everything can be changed afterwards under “Customize → Materials”."}</p>
+    </details>
   );
 }
 

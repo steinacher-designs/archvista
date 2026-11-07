@@ -1,9 +1,9 @@
 // ARCHVISTA — build the public, privacy-safe scene (GLB + JSON) that the website loads.
 
-import type { PreparedScene } from "../scene";
+import type { PreparedScene, ScenePart } from "../scene";
 import type { Project, Hotspot, Viewpoint, EnvironmentId, Quality, Lighting, Place } from "../project";
 import { Zone, removeGreyGeometry, pointInZone } from "../zones";
-import { PRESET, MaterialPreset, withColour } from "../materials";
+import { PRESET, MaterialPreset, withColour, setCustomPresets } from "../materials";
 import { writeGlb } from "./glb";
 import { cellOf } from "../analysis/spatial";
 
@@ -40,16 +40,24 @@ export function effectiveZones(project: Project): Zone[] {
 }
 
 /** Geometry as published: GREY areas clipped away, materials resolved (user overrides first). */
+/** The material a part shows: user choice, else automatic (incl. the CAD colour), plus a user colour. */
+export function partMaterialId(part: Pick<ScenePart, "key" | "auto">, project: Pick<Project, "materialOverrides" | "materialColors">): string {
+  const ov = project.materialOverrides[part.key];
+  const colour = project.materialColors?.[part.key] ?? (ov ? undefined : part.auto.color);
+  return withColour(ov ?? part.auto.presetId, colour);
+}
+
 export function publicParts(scene: PreparedScene, project: Project) {
+  setCustomPresets(project.customMaterials);
   const grey = effectiveZones(project).filter((z) => z.kind === "grey");
   const meshes = scene.parts.map((p) => ({ id: p.id, layer: p.layer, color: p.color, positions: p.positions, normals: p.normals, indices: p.indices, triangleCount: p.indices.length / 3 }));
   const cut = removeGreyGeometry(meshes, grey);
   const byId = new Map(scene.parts.map((p) => [p.id, p]));
   const parts = cut.meshes.map((m) => {
     const part = byId.get(m.id)!;
-    const presetId = withColour(project.materialOverrides[part.key] ?? part.auto.presetId, project.materialColors?.[part.key]);
+    const presetId = partMaterialId(part, project);
     const uvs = m.positions === part.positions ? part.uvs : boxUV(m.positions, m.normals);
-    return { presetId, positions: m.positions, normals: m.normals, uvs, indices: m.indices };
+    return { presetId, key: part.key, positions: m.positions, normals: m.normals, uvs, indices: m.indices };
   });
   return { parts, removedTriangles: cut.removedTriangles, clippedTriangles: cut.clippedTriangles };
 }
@@ -62,6 +70,7 @@ export function buildPublicScene(scene: PreparedScene, project: Project) {
 }
 
 export function publicConfig(scene: PreparedScene, project: Project, usedPresets: Set<string>): PublicConfig {
+  setCustomPresets(project.customMaterials);
   const zones = effectiveZones(project);
   const grey = zones.filter((z) => z.kind === "grey");
   const red = zones.filter((z) => z.kind === "red");

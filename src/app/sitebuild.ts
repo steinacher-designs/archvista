@@ -4,6 +4,7 @@ import { generateSite, type FileMap } from "../core/site/generate";
 import type { PreparedScene } from "../core/scene";
 import type { Project, Viewpoint } from "../core/project";
 import { platform } from "./platform";
+import { textureDocId } from "../core/materials";
 
 export async function buildSiteFiles(project: Project, scene: PreparedScene, onProgress?: (f: number, label: string) => void): Promise<{ files: FileMap; ms: number }> {
   const t0 = performance.now();
@@ -18,7 +19,13 @@ export async function buildSiteFiles(project: Project, scene: PreparedScene, onP
     const data = await platform.loadDocument(project.id, doc.id);
     if (data) documents.push({ doc, data });
   }
-  const files = await generateSite({ project, scene, pub, runtime, readAsset: (p) => platform.readBundled(`assets-lib/${p}`), documents });
+  const textures: { name: string; data: Uint8Array }[] = [];
+  for (const m of project.customMaterials ?? []) {
+    if (!m.image) continue;
+    const data = await platform.loadDocument(project.id, textureDocId(m.image));
+    if (data) textures.push({ name: m.image, data });
+  }
+  const files = await generateSite({ project, scene, pub, runtime, readAsset: (p) => platform.readBundled(`assets-lib/${p}`), documents, textures });
   onProgress?.(1, "Fertig");
   return { files, ms: performance.now() - t0 };
 }

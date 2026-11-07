@@ -1,0 +1,22 @@
+// Dev helper: screenshots of the app (browser build): home, customize, publish — args: dist dxf outDir
+import { chromium } from "playwright"; import http from "node:http"; import { readFile } from "node:fs/promises"; import path from "node:path";
+const [dist, dxf, out] = process.argv.slice(2);
+const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml" };
+const srv = http.createServer(async (q, r) => { let f = decodeURIComponent(q.url.split("?")[0]); if (f === "/") f = "/index.html"; try { const b = await readFile(path.join(dist, f)); r.writeHead(200, { "content-type": types[path.extname(f)] ?? "application/octet-stream" }); r.end(b); } catch { r.writeHead(404); r.end(); } }).listen(0);
+const b = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+await p.addInitScript(() => { localStorage.setItem("av-maxfps", "1"); localStorage.setItem("av-auto", "0"); sessionStorage.setItem("av-gpu-hint", "off"); });
+await p.goto(`http://localhost:${srv.address().port}/`);
+await p.waitForTimeout(1500);
+await p.screenshot({ path: `${out}/app-home.png` });
+await p.getByTestId("file").setInputFiles(dxf);
+await p.getByTestId("viewer").waitFor({ timeout: 120000 });
+await p.waitForTimeout(8000);
+await p.getByTestId("tab-materials").click();
+await p.locator(".mhead").first().click();
+await p.waitForTimeout(3000);
+await p.screenshot({ path: `${out}/app-work.png`, timeout: 120000 });
+await p.getByTestId("step-publish").click();
+await p.waitForTimeout(2500);
+await p.screenshot({ path: `${out}/app-publish.png`, timeout: 120000 });
+await b.close(); srv.close();

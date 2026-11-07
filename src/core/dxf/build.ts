@@ -16,6 +16,8 @@ const ANNOTATION_TYPES = new Set([
 export interface TriGroup {
   layer: string;
   color: number; // 0xRRGGBB
+  /** CAD material name (DXF MATERIAL object), if one is assigned. */
+  material?: string;
   /** Flat WCS positions in drawing units, 9 numbers per triangle. */
   tris: number[];
 }
@@ -40,6 +42,7 @@ export interface BuildResult {
 interface Ctx {
   layer: string; // effective layer
   color: number; // inherited rgb for BYBLOCK
+  material?: string; // inherited material name for BYBLOCK
   depth: number;
   stack: string[];
 }
@@ -73,11 +76,30 @@ export function buildGeometry(dxf: RawDxf): BuildResult {
     return !!l && (l.color < 0 || (l.flags & 1) === 1);
   };
 
+  // materials: entity (347) → BYLAYER (layer's material) / BYBLOCK (insert's material) / GLOBAL (none)
+  const matName = (handle: string | undefined): string | undefined => handle ? dxf.materials.get(handle.toUpperCase())?.name : undefined;
+  const special = (n: string | undefined) => (n ?? "").toUpperCase();
+  const layerMaterial = (layer: string): string | undefined => {
+    const n = matName(dxf.layers.get(layer.toUpperCase())?.material);
+    const u = special(n);
+    return !n || u === "GLOBAL" || u === "BYLAYER" || u === "BYBLOCK" ? undefined : n;
+  };
+  const resolveMaterial = (P: Pair[], layer: string, ctx: Ctx): string | undefined => {
+    const n = matName(str(P, 347) || undefined);
+    const u = special(n);
+    if (!n || u === "BYLAYER") return layerMaterial(layer);
+    if (u === "BYBLOCK") return ctx.material;
+    if (u === "GLOBAL") return undefined;
+    return n;
+  };
+  let curMat: string | undefined;
+
   const groupFor = (layer: string, color: number): TriGroup => {
-    const key = `${layer}\u0000${color}`;
+    const material = curMat;
+    const key = `${layer}\u0000${color}\u0000${material ?? ""}`;
     let g = res.groups.get(key);
     if (!g) {
-      g = { layer, color, tris: [] };
+      g = { layer, color, material, tris: [] };
       res.groups.set(key, g);
     }
     return g;
@@ -113,6 +135,8 @@ export function buildGeometry(dxf: RawDxf): BuildResult {
     else if (aci === 256) color = layerRgb(layer);
     else color = aciToRgb(aci);
 
+    const material = resolveMaterial(P, layer, ctx);
+    curMat = material;
     const flip = det3(M) < 0;
     const thickness = num(P, 39, 0);
     const ext: V3 = [num(P, 210, 0), num(P, 220, 0), num(P, 230, 1)];
@@ -185,7 +209,7 @@ export function buildGeometry(dxf: RawDxf): BuildResult {
         mesh(e, M, flip, groupFor(layer, color));
         return;
       case "INSERT":
-        insert(e, M, { ...ctx, layer, color }, layer, color);
+        insert(e, M, { ...ctx, layer, color, material }, layer, color);
         return;
       default:
         if (ANNOTATION_TYPES.has(e.type) || e.type === "LINE" || e.type === "CIRCLE") res.ignored2d++;
@@ -280,7 +304,7 @@ export function buildGeometry(dxf: RawDxf): BuildResult {
         T = mul(T, translate(c * cs, r * rs, 0));
         T = mul(T, scale(sx, sy, sz));
         T = mul(T, translate(-block.base[0], -block.base[1], -block.base[2]));
-        const child: Ctx = { layer, color, depth: ctx.depth + 1, stack: [...ctx.stack, name.toUpperCase()] };
+        const child: Ctx = { layer, color, material: ctx.material, depth: ctx.depth + 1, stack: [...ctx.stack, name.toUpperCase()] };
         for (const be of block.entities) visit(be, T, child);
       }
   };

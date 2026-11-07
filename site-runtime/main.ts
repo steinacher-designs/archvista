@@ -36,7 +36,7 @@ export async function mount(el: HTMLElement) {
   loading.innerHTML = `<div>${t(lang, "loading")}</div><div class="av-track"><div class="av-fill"></div></div>`;
   el.appendChild(loading);
   if (!webgl2()) { loading.innerHTML = `<div>${t(lang, "webgl")}</div>`; return; }
-  const viewer = new ArchViewer(el, { language: lang, cinematic: el.dataset.cinematic === "1", vr: true, assetBase: el.dataset.lib ?? base + "lib/" });
+  const viewer = new ArchViewer(el, { language: lang, cinematic: el.dataset.cinematic === "1", vr: true, assetBase: el.dataset.lib ?? base + "lib/", imageBase: base + "tex-user/" });
   const glb = await fetchWithProgress(base + "scene.glb", (f) => { (loading.querySelector(".av-fill") as HTMLElement).style.width = `${Math.round(f * 100)}%`; });
   if (location.search.includes("still")) viewer.paused = true;
   await viewer.loadGlb(glb, cfg);
