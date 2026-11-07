@@ -198,3 +198,4 @@ button { cursor: pointer; }
 .mat .swatch { background-size: cover; }
 .drop.small { padding: 22px 16px; border-radius: 18px; box-shadow: none; }
 .mini { border: 0; border-bottom: 1px dashed var(--ink3); background: none; font-size: 12px; width: 120px; padding: 0 2px; color: var(--ink2); }
+.zlist li > .pill { flex: none; }

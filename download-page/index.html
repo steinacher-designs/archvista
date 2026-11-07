@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARCHVISTA – kostenlos herunterladen</title>
+<meta name="description" content="ARCHVISTA verwandelt 3D-DXF-Dateien aus AutoCAD in wenigen Minuten in fotorealistische, begehbare Architektur-Websites. Kostenlos für Windows.">
+<link rel="icon" href="icon.png">
+<style>
+  :root { --ink: #1c1b1a; --ink2: #5f5b55; --ink3: #9a958d; --bg: #f4f2ee; --brand: #b8673b; --line: #e6e2db; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 17px/1.6 "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  header { display: flex; align-items: center; gap: 12px; padding: 22px 0; font-weight: 700; letter-spacing: .14em; font-size: 14px; }
+  header img { width: 34px; height: 34px; border-radius: 9px; }
+  .hero { padding: 56px 0 40px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: center; }
+  h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.04; letter-spacing: -.025em; margin: 0 0 18px; }
+  .lead { color: var(--ink2); font-size: 20px; margin: 0 0 30px; }
+  .dl { display: inline-flex; align-items: center; gap: 14px; background: var(--brand); color: #fff; text-decoration: none; font-weight: 700; font-size: 19px; padding: 20px 30px; border-radius: 18px; box-shadow: 0 12px 30px rgba(184,103,59,.32); transition: transform .15s, box-shadow .2s; }
+  .dl:hover { transform: translateY(-2px); box-shadow: 0 16px 36px rgba(184,103,59,.4); }
+  .dl svg { flex: none; }
+  .meta { color: var(--ink3); font-size: 14px; margin-top: 14px; }
+  .meta a { color: var(--ink2); }
+  .shot { border-radius: 22px; overflow: hidden; background: #ddd; box-shadow: 0 30px 70px rgba(30,25,15,.18); aspect-ratio: 16/10; }
+  .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 30px; letter-spacing: -.015em; margin: 0 0 26px; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: s; list-style: none; padding: 0; margin: 0; }
+  .steps li { background: #fff; border-radius: 18px; padding: 24px; counter-increment: s; }
+  .steps li::before { content: counter(s); display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--ink); color: #fff; font-weight: 700; margin-bottom: 12px; }
+  .steps b { display: block; margin-bottom: 4px; }
+  .steps p, .feat p { margin: 0; color: var(--ink2); font-size: 15.5px; }
+  .feat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+  .feat b { display: block; margin-bottom: 4px; }
+  .note { background: #fff; border-radius: 18px; padding: 22px 24px; }
+  .note ol { margin: 8px 0 0; padding-left: 20px; color: var(--ink2); }
+  kbd { font: 600 14px ui-monospace, Consolas, monospace; background: #f1eee8; border-radius: 6px; padding: 2px 7px; }
+  footer { padding: 40px 0 60px; color: var(--ink3); font-size: 14px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; border-top: 1px solid var(--line); }
+  footer b { color: var(--ink2); }
+  footer a { color: var(--ink2); }
+  @media (max-width: 860px) { .hero, .steps, .feat { grid-template-columns: 1fr; } .hero { padding-top: 24px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><img src="icon.png" alt="">ARCHVISTA</header>
+
+  <div class="hero">
+    <div>
+      <h1>Aus Ihrer 3D-DXF wird eine begehbare Website.</h1>
+      <p class="lead">DXF aus AutoCAD hineinziehen – ARCHVISTA erkennt Geschosse und Räume, setzt das Gebäude in eine fotorealistische Umgebung und veröffentlicht eine fertige Website. In wenigen Minuten, ohne Vorkenntnisse.</p>
+      <a class="dl" id="dl" href="https://github.com/steinacher-designs/archvista/releases/latest/download/ARCHVISTA-Setup.exe">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/></svg>
+        Kostenlos herunterladen
+      </a>
+      <div class="meta">Für Windows 10 und 11 · ca. 50 MB · <span id="ver">neueste Version</span> · <a href="https://github.com/steinacher-designs/archvista/releases">alle Versionen</a></div>
+    </div>
+    <div class="shot"><img src="screenshot.jpg" alt="ARCHVISTA: Haus in fotorealistischer Umgebung" onerror="this.parentNode.style.display='none'"></div>
+  </div>
+
+  <section>
+    <h2>So geht's</h2>
+    <ol class="steps">
+      <li><b>Herunterladen</b><p>Auf „Kostenlos herunterladen“ klicken.</p></li>
+      <li><b>Doppelklick</b><p>Die Datei <kbd>ARCHVISTA-Setup.exe</kbd> öffnen. Keine Administratorrechte nötig.</p></li>
+      <li><b>Loslegen</b><p>ARCHVISTA über das Symbol auf dem Desktop oder im Startmenü öffnen – oder einfach eine .dxf doppelklicken.</p></li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="note">
+      <b>Windows zeigt „Der Computer wurde durch Windows geschützt“?</b>
+      Das erscheint bei neuen, noch wenig verbreiteten Programmen ohne kostenpflichtiges Zertifikat. ARCHVISTA ist quelloffen und kostenlos.
+      <ol><li>Auf <b>„Weitere Informationen“</b> klicken</li><li>dann auf <b>„Trotzdem ausführen“</b></li></ol>
+    </div>
+  </section>
+
+  <section>
+    <h2>Was ARCHVISTA kann</h2>
+    <div class="feat">
+      <div><b>DXF direkt lesen</b><p>3D-Flächen, Netze, Blöcke, Layer und Einheiten – ohne Umwandeln.</p></div>
+      <div><b>Fotorealistisch</b><p>Echte Foto-Umgebungen (Stadt, Natur, Küste, Studio), Licht, Schatten und fast 50 Materialien.</p></div>
+      <div><b>Begehbar</b><p>Wie in einem Spiel mit W A S D, Treppen und Kollision – am Computer und am Handy.</p></div>
+      <div><b>Bereiche sperren</b><p>Räume sperren oder komplett aus der Website entfernen.</p></div>
+      <div><b>Pläne & Unterlagen</b><p>PDFs, DWGs und ganze Ordner zum Herunterladen anbieten.</p></div>
+      <div><b>Ein Klick online</b><p>Kostenlos über GitHub veröffentlichen. Updates kommen automatisch.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>ARCHVISTA · entwickelt von <b>Judith Steinacher</b></span>
+    <span>Kostenlos · <a href="https://github.com/steinacher-designs/archvista">Quellcode</a> · Umgebungen & Materialien: Poly Haven, ambientCG (CC0)</span>
+  </footer>
+</div>
+<script>
+  // show the current version number (the button always points to the newest installer)
+  fetch("https://api.github.com/repos/steinacher-designs/archvista/releases/latest")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => { if (j && j.tag_name) document.getElementById("ver").textContent = "Version " + j.tag_name.replace(/^v/, ""); })
+    .catch(() => {});
+</script>
+</body>
+</html>

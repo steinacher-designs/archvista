@@ -31,8 +31,16 @@ python3 tests/fixtures/gen_models.py tests/fixtures/models   # Testmodelle neu e
 node scripts/fetch-assets.mjs  # CC0-Inhalte neu laden und aufbereiten
 ```
 
+## Automatische Updates
+Die App prüft beim Start (und alle 6 Stunden) `releases/latest/download/latest.json`. Updates sind mit einem Schlüssel signiert:
+- öffentlicher Schlüssel: `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`
+- privater Schlüssel: GitHub-Secret **`TAURI_SIGNING_PRIVATE_KEY`** (ohne Passwort). Geht er verloren, können installierte Apps keine Updates mehr annehmen – sicher aufbewahren.
+
+## Download-Seite
+`download-page/` wird per Action „Download page“ auf https://steinacher-designs.github.io/archvista/ veröffentlicht. Der Knopf zeigt immer auf `releases/latest/download/ARCHVISTA-Setup.exe`.
+
 ## Release
-Tag `vX.Y.Z` pushen → GitHub Action „Release“ baut auf Windows Setup-.exe und .msi und legt einen Release-Entwurf an. Die GitHub-OAuth-Client-ID wird als Repository-Variable `ARCHVISTA_OAUTH_CLIENT_ID` (optional; Standard ist die ARCHVISTA-App) hinterlegt.
+Version in `package.json`, `src-tauri/tauri.conf.json` und `src-tauri/Cargo.toml` erhöhen, dann Action „Release“ starten (Actions → Release → Run workflow). Sie baut Setup-.exe und .msi, signiert das Update und veröffentlicht das Release; installierte Apps bieten das Update danach automatisch an. Die GitHub-OAuth-Client-ID wird als Repository-Variable `ARCHVISTA_OAUTH_CLIENT_ID` (optional; Standard ist die ARCHVISTA-App) hinterlegt.
 
 ## Technische Entscheidungen
 - **Three.js direkt statt React Three Fiber** im Viewer: dieselbe Laufzeit läuft in der App und als eigenständige Website (eine ES-Datei, ~290 KB gzip), ohne React auf der Website.

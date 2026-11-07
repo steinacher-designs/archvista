@@ -20,3 +20,12 @@
 | Offline-Export | ✅ | |
 | Windows-Installer (NSIS .exe + MSI) | ✅ gebaut | GitHub Actions (windows-latest): ARCHVISTA_1.0.0_x64-setup.exe (50 MB), MSI de-DE / en-US |
 | Abnahme auf sauberem Windows-System | ⏳ | nach erstem Installer-Build |
+
+## Version 1.1
+| Bereich | Status | Anmerkung |
+|---|---|---|
+| Automatische Updates (signiert, GitHub Releases) | ✅ gebaut | Signatur lokal geprüft; Echtlauf ab dem ersten Update nach 1.1.0 |
+| 30 weitere Materialien (47 gesamt) + eigene Farbe je Bauteil | ✅ | Fotoscans Poly Haven / ambientCG (CC0) |
+| Eigene Orte in der Sprungliste, Geschosse umbenennen/ausblenden | ✅ | Orte in ausgeblendeten/gesperrten Bereichen werden nicht veröffentlicht |
+| Pläne & Unterlagen (PDF, DWG, beliebige Dateien, ganze Ordner) | ✅ | einzelne Dateien bis 95 MB (GitHub-Grenze) |
+| Download-Seite + fester Download-Link | ✅ | Windows SmartScreen-Hinweis bei unsignierter .exe (Code-Signing-Zertifikat kostet Geld) |
