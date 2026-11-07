@@ -36,7 +36,13 @@ export async function buildSiteFiles(project: Project, scene: PreparedScene, onP
   onProgress?.(0.75, "Website-Dateien werden geschrieben");
   const runtime = await platform.readBundled("site-runtime/viewer.js");
   if (!runtime) throw new Error("Website-Laufzeit fehlt in der Installation (site-runtime/viewer.js).");
-  const files = await generateSite({ project, scene, pub, runtime, readAsset: (p) => platform.readBundled(`assets-lib/${p}`), renders });
+  onProgress?.(0.8, "Pläne & Unterlagen werden eingebunden");
+  const documents: { doc: NonNullable<Project["documents"]>[number]; data: Uint8Array }[] = [];
+  for (const doc of project.documents ?? []) {
+    const data = await platform.loadDocument(project.id, doc.id);
+    if (data) documents.push({ doc, data });
+  }
+  const files = await generateSite({ project, scene, pub, runtime, readAsset: (p) => platform.readBundled(`assets-lib/${p}`), renders, documents });
   onProgress?.(1, "Fertig");
   return { files, ms: performance.now() - t0 };
 }

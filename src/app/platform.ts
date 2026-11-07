@@ -60,6 +60,21 @@ export const platform = {
     return j && dxf ? { project: JSON.parse(j), dxf } : null;
   },
 
+  async saveDocument(projectId: string, docId: string, bytes: Uint8Array) {
+    if (isTauri) { const { invoke } = await core(); await invoke("doc_save", bytes, { headers: { "x-id": projectId, "x-doc": docId } }); return; }
+    await idbPut(`doc-${projectId}-${docId}`, bytes);
+  },
+  async loadDocument(projectId: string, docId: string): Promise<Uint8Array | null> {
+    try {
+      if (isTauri) { const { invoke } = await core(); return new Uint8Array(await invoke<ArrayBuffer>("doc_load", { id: projectId, doc: docId })); }
+      return await idbGet(`doc-${projectId}-${docId}`);
+    } catch { return null; }
+  },
+  async deleteDocument(projectId: string, docId: string) {
+    if (isTauri) { const { invoke } = await core(); await invoke("doc_delete", { id: projectId, doc: docId }).catch(() => {}); return; }
+    try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").delete(`doc-${projectId}-${docId}`); } catch { /* ignore */ }
+  },
+
   async deleteProject(id: string) {
     if (isTauri) { const { invoke } = await core(); await invoke("project_delete", { id }); return; }
     localStorage.removeItem(`av-project-${id}`); localStorage.removeItem(`av-thumb-${id}`);

@@ -49,6 +49,7 @@ export function Home() {
           )}
         </div>
       </div>
+      <footer className="credit">ARCHVISTA {__APP_VERSION__} · {useStore.getState().lang === "de" ? "entwickelt von" : "developed by"} <b>Judith Steinacher</b></footer>
       {help && <ExportHelp onClose={() => setHelp(false)} />}
     </div>
   );

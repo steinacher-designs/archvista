@@ -1,6 +1,6 @@
 // ARCHVISTA — static website generator. Produces a complete, self-contained site as a file map.
 
-import type { Project } from "../project";
+import type { Project, ProjectDocument } from "../project";
 import type { PreparedScene } from "../scene";
 import type { PublicConfig } from "../export/public-scene";
 import { renderTemplate, SiteData, esc } from "./templates";
@@ -18,6 +18,35 @@ export interface SiteInput {
   readAsset: AssetReader;
   /** Rendered stills (jpeg) keyed by viewpoint id, captured by the app. */
   renders?: { id: string; caption: string; data: Uint8Array }[];
+  /** Downloads (plans, details …) with their bytes. */
+  documents?: { doc: ProjectDocument; data: Uint8Array }[];
+}
+
+/** Safe, readable path segment (keeps German umlauts readable, removes everything risky). */
+export function safeSegment(s: string, fallback: string) {
+  const t = s.normalize("NFC").replace(/[\\/:*?"<>|#%&{}$!'@+`=\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").replace(/^[\s.]+/, "").trim().slice(0, 80);
+  return t || fallback;
+}
+
+export function formatSize(n: number, lang: "de" | "en") {
+  const f = (v: number, d = 1) => v.toLocaleString(lang === "de" ? "de-AT" : "en-GB", { maximumFractionDigits: d });
+  return n >= 1e6 ? `${f(n / 1e6)} MB` : n >= 1e3 ? `${f(n / 1e3, 0)} KB` : `${n} B`;
+}
+
+/** Website paths for documents: downloads/<folder>/<file>, unique per folder. */
+export function documentPaths(docs: ProjectDocument[]): Map<string, string> {
+  const used = new Set<string>();
+  const out = new Map<string, string>();
+  for (const d of docs) {
+    const folder = safeSegment(d.folder, "Dateien");
+    const name = safeSegment(d.fileName, "datei");
+    const dot = name.lastIndexOf(".");
+    let path = `downloads/${folder}/${name}`;
+    for (let i = 2; used.has(path.toLowerCase()); i++) path = `downloads/${folder}/${dot > 0 ? `${name.slice(0, dot)} (${i})${name.slice(dot)}` : `${name} (${i})`}`;
+    used.add(path.toLowerCase());
+    out.set(d.id, path);
+  }
+  return out;
 }
 
 const enc = new TextEncoder();
@@ -26,7 +55,7 @@ const enc = new TextEncoder();
 export function requiredAssets(config: PublicConfig, manifest: { textures: Record<string, unknown>; hdri: Record<string, unknown>; models: Record<string, unknown> }): string[] {
   const out = new Set<string>(["manifest.json", "LICENSES.json"]);
   const tex = (k: string) => { if (manifest.textures[k]) for (const s of ["col", "nor", "arm"]) out.add(`tex/${k}_${s}.webp`); };
-  for (const id of Object.keys(config.materials)) tex(id);
+  for (const [id, m] of Object.entries(config.materials)) tex(m.tex ?? id);
   const env = config.hasTerrain ? "studio" : config.environment;
   // photographic surroundings: one panorama + its HDR replace modelled terrain, plants and sky
   if (env !== "studio" && manifest.hdri[`env_${env}`]) {
@@ -82,7 +111,24 @@ export function siteData(input: SiteInput): SiteData {
     hero: gallery[0]?.src ?? null,
     levels: pub.config.levels.map((l) => (L === "de" ? l.name.de : l.name.en)),
     hasTour: pub.config.tour && pub.config.viewpoints.length > 1,
+    documents: groupDocuments(input),
   };
+}
+
+function groupDocuments(input: SiteInput): SiteData["documents"] {
+  const docs = (input.project.documents ?? []).filter((d) => input.documents?.some((x) => x.doc.id === d.id));
+  if (!docs.length) return undefined;
+  const paths = documentPaths(docs);
+  const L = input.project.language;
+  const groups = new Map<string, NonNullable<SiteData["documents"]>[number]["items"]>();
+  for (const d of docs) {
+    const g = d.folder.trim() || (L === "de" ? "Dateien" : "Files");
+    const ext = (d.fileName.split(".").pop() ?? "").toUpperCase().slice(0, 5) || "FILE";
+    const href = paths.get(d.id)!.split("/").map(encodeURIComponent).join("/");
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g)!.push({ title: d.title || d.fileName, href, ext, size: formatSize(d.size, L), open: /^(PDF|JPG|JPEG|PNG|WEBP|SVG)$/.test(ext) });
+  }
+  return [...groups].map(([folder, items]) => ({ folder, items }));
 }
 
 export async function generateSite(input: SiteInput): Promise<FileMap> {
@@ -139,6 +185,9 @@ export async function generateSite(input: SiteInput): Promise<FileMap> {
   if (!p.images.length) for (const r of (input.renders ?? []).slice(0, 1)) files.set(`images/${r.id}.jpg`, r.data);
   for (const [k, v] of hsImages) files.set(k, v);
   p.images.slice(0, 1).forEach((im) => { const b = dataUrlBytes(im.dataUrl); if (b) files.set(`images/user-1${extOf(im.dataUrl)}`, b); });
+  // downloads (plans, details …) — real files, same structure as the user's folders
+  const paths = documentPaths((p.documents ?? []).filter((d) => input.documents?.some((x) => x.doc.id === d.id)));
+  for (const { doc, data } of input.documents ?? []) { const path = paths.get(doc.id); if (path) files.set(path, data); }
   files.set("credits.html", enc.encode(credits(p, used)));
   return files;
 }
@@ -152,7 +201,7 @@ function credits(p: Project, used: Record<string, { name: string; authors: strin
 <p>${de ? "Das 3D-Modell stammt aus den Planunterlagen des Projekts" : "The 3D model comes from the project's drawings"}${p.author ? ` (${esc(p.author)})` : ""}.
 ${de ? "Umgebung, Himmel und Materialoberflächen verwenden freie Inhalte (CC0) von Poly Haven und ambientCG:" : "Surroundings, sky and material surfaces use free (CC0) content from Poly Haven and ambientCG:"}</p>
 <ul>${rows}</ul>
-<p>${de ? "3D-Darstellung: three.js (MIT-Lizenz). Erstellt mit ARCHVISTA." : "3D rendering: three.js (MIT licence). Made with ARCHVISTA."}</p>
+<p>${de ? "3D-Darstellung: three.js (MIT-Lizenz). Erstellt mit ARCHVISTA von Judith Steinacher." : "3D rendering: three.js (MIT licence). Made with ARCHVISTA by Judith Steinacher."}</p>
 <p><a href="index.html">← ${de ? "Zurück" : "Back"}</a></p></html>`;
 }
 

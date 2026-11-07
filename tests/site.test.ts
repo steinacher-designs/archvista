@@ -106,3 +106,63 @@ describe("website generator", () => {
     expect(await gitBlobSha(new TextEncoder().encode("hello\n"))).toBe("ce013625030ba8dba906f756967f9e9ca394464a");
   });
 });
+
+describe("v1.1: documents, places, storey names, materials", () => {
+  const doc = (id: string, folder: string, fileName: string, size = 3) => ({ id, folder, title: fileName.replace(/\.[^.]+$/, ""), fileName, size, addedAt: "" });
+  const bytes = (s: string) => new TextEncoder().encode(s);
+
+  it("ships documents as real files grouped by folder, in every design", async () => {
+    for (const t of TEMPLATES) {
+      const project = newProject("house_mm.dxf", "abc");
+      project.template = t.id;
+      project.documents = [doc("a", "Pläne", "Grundriss EG.pdf"), doc("b", "Pläne", "Grundriss EG.pdf"), doc("c", "Details", "Fenster D1.dwg", 2_500_000)];
+      const pub = buildPublicScene(scene, project);
+      const files = await generateSite({ project, scene, pub, runtime, readAsset, documents: project.documents.map((d) => ({ doc: d, data: bytes(d.id) })) });
+      expect(new TextDecoder().decode(files.get("downloads/Pläne/Grundriss EG.pdf")!)).toBe("a");
+      expect(new TextDecoder().decode(files.get("downloads/Pläne/Grundriss EG (2).pdf")!)).toBe("b");
+      expect(files.has("downloads/Details/Fenster D1.dwg")).toBe(true);
+      const h = html(files);
+      expect(h).toContain('id="plaene"');
+      expect(h).toMatch(/Pläne &amp; Unterlagen|Pläne & Unterlagen/);
+      expect(h).toContain('href="downloads/Pl%C3%A4ne/Grundriss%20EG.pdf" target="_blank"'); // PDFs open in the browser
+      expect(h).toContain('href="downloads/Details/Fenster%20D1.dwg" download'); // DWGs download
+      expect(h).toMatch(/2,5 MB/);
+    }
+  });
+
+  it("no documents → no section", async () => {
+    expect(html((await site()).files)).not.toContain('id="plaene"');
+  });
+
+  it("own places and renamed / hidden storeys reach the website; places in hidden areas are dropped", async () => {
+    const upper = scene.analysis.rooms.filter((r) => r.level === 1);
+    const lv = scene.analysis.levels[1];
+    const { pub } = await site((p) => {
+      p.levelNames = { 0: "Wohnen" };
+      p.hiddenLevels = [2];
+      p.places = [
+        { id: "k", name: "Küche", position: [upper[0].centroid[0], lv.elevation + 1.65, upper[0].centroid[1]], target: [0, 0, 0], walk: true },
+        { id: "g", name: "Geheim", position: [upper[1].centroid[0], lv.elevation + 1.65, upper[1].centroid[1]], target: [0, 0, 0], walk: true },
+      ];
+      p.zones = [{ id: "z", kind: "grey", polygon: upper[1].outline, yMin: lv.elevation - 0.2, yMax: lv.elevation + lv.height, source: "room", roomId: upper[1].id, level: 1 }];
+    });
+    expect(pub.config.levels[0].name.de).toBe("Wohnen");
+    expect(pub.config.levels.find((l) => l.hidden)).toBeTruthy();
+    expect(pub.config.places.map((p) => p.name)).toEqual(["Küche"]);
+  });
+
+  it("offers many materials, each in a picker group; colour variants keep the base texture", async () => {
+    const { PRESETS, resolvePreset, withColour } = await import("../src/core/materials");
+    expect(PRESETS.length).toBeGreaterThanOrEqual(45);
+    for (const p of PRESETS) expect(p.group).toBeTruthy();
+    const v = resolvePreset(withColour("brick", "#123456"))!;
+    expect(v.color).toBe("#123456");
+    expect(v.tex).toBe("brick");
+    // a site using a colour variant ships the base texture
+    const part = scene.parts.find((p) => p.category === "wall")!;
+    const { files } = await site((p) => { p.materialOverrides[part.key] = "marble_white"; p.materialColors = { [part.key]: "#ff0000" }; });
+    expect(files.has("assets/lib/tex/marble_white_col.webp")).toBe(true);
+    const cfg = JSON.parse(new TextDecoder().decode(files.get("assets/scene.json")!));
+    expect(Object.keys(cfg.materials)).toContain("marble_white~#ff0000");
+  });
+});

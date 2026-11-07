@@ -214,16 +214,19 @@ export class ArchViewer {
     }
     // upgrade to photo-scanned textures when the asset library has them
     if (pr.texture !== "none") {
-      this.lib.photo(id).then((ph) => {
+      this.lib.photo(pr.tex ?? id).then((ph) => {
         if (!ph || this.mats.get(id) !== m) return;
         const rep = 1 / ph.size;
         const c = (t: Texture) => { const x = t.clone(); x.repeat.set(rep, rep); x.needsUpdate = true; return x; };
-        const keepColour = id.startsWith("plaster"); // presentation-white render: relief only, colour stays clean
+        // paint-like surfaces: relief from the scan, colour stays exactly the chosen colour
+        const keepColour = !!pr!.paintable;
+        const userTint = !!pr!.tex && !keepColour; // colour variant of a photo material
         m.map = keepColour ? null : c(ph.map);
         m.normalMap = c(ph.normalMap);
         const arm = c(ph.arm);
         m.roughnessMap = arm; m.aoMap = arm; m.aoMapIntensity = keepColour ? 0.5 : 1;
-        m.roughness = 1; m.metalness = 0; m.color.set(keepColour ? pr!.color : tintFor(pr!.color));
+        m.roughness = 1; m.metalness = pr!.metalness * 0.6;
+        m.color.set(keepColour ? pr!.color : userTint ? new Color(pr!.color).lerp(new Color(1, 1, 1), 0.3) : tintFor(pr!.color));
         m.normalScale.set(1, 1);
         m.needsUpdate = true;
       });
@@ -834,7 +837,11 @@ export class ArchViewer {
   /** Render exactly one frame (stills, tests). Waits for pending assets first. */
   async renderOnce() {
     await this.assetsSettled();
-    this.orbit.update();
+    if (this.mode === "walk" && this.walker) {
+      this.walker.update(1 / 60, { x: 0, z: 0 });
+      this.walker.eye(this.camera.position);
+      this.camera.rotation.set(this.walker.pitch, this.walker.yaw, 0, "YXZ");
+    } else this.orbit.update();
     this.updateHotspots();
     this.composer.render(0.016);
   }
@@ -887,7 +894,7 @@ export class ArchViewer {
         <button data-a="quality" class="av-b av-q" title="${L("quality")}"></button>
         <button data-a="fs" class="av-b" title="${L("fullscreen")}" aria-label="${L("fullscreen")}">⤢</button>
       </div>
-      ${levels.length > 1 ? `<div class="av-levels">${levels.map((l, i) => `<button data-lv="${i}" class="av-b av-lv">${this.lang === "de" ? l.name.de : l.name.en}</button>`).join("")}</div>` : ""}
+      ${this.jumpList(levels)}
       <div class="av-hint"></div>
       <div class="av-panel"></div>`;
     hud.addEventListener("click", (e) => {
@@ -896,6 +903,7 @@ export class ArchViewer {
       e.stopPropagation();
       const a = b.dataset.a;
       if (b.dataset.lv) this.goToLevel(+b.dataset.lv);
+      else if (b.dataset.place) { const pl = this.config!.places?.find((x) => x.id === b.dataset.place); if (pl) this.goToPlace(pl); hud.querySelectorAll("[data-lv],[data-place]").forEach((x) => x.classList.toggle("on", x === b)); }
       else if (a === "walk") this.startWalk(this.mode !== "walk");
       else if (a === "orbit") this.setMode("orbit");
       else if (a === "tour") (this.tour ? this.stopTour() : this.startTour());
@@ -912,6 +920,52 @@ export class ArchViewer {
     this.updateHudState();
   }
 
+  /** Storeys (top floor first) followed by the user's own places. */
+  private jumpList(levels: PublicConfig["levels"]): string {
+    const name = (n: { de: string; en: string }) => esc(this.lang === "de" ? n.de : n.en);
+    const lv = levels.map((l, i) => ({ l, i })).filter(({ l }) => !l.hidden).reverse();
+    const places = this.config?.places ?? [];
+    const showLevels = lv.length > 1 || (lv.length === 1 && places.length > 0);
+    if (!showLevels && !places.length) return "";
+    return `<div class="av-levels">
+      ${showLevels ? lv.map(({ l, i }) => `<button data-lv="${i}" class="av-b av-lv">${name(l.name)}</button>`).join("") : ""}
+      ${showLevels && places.length ? `<span class="av-hsep"></span>` : ""}
+      ${places.map((p) => `<button data-place="${esc(p.id)}" class="av-b av-lv av-place">${esc(p.name)}</button>`).join("")}
+    </div>`;
+  }
+
+  /** Jump to a user-defined place (walk places start first-person, others fly the orbit camera). */
+  goToPlace(p: { position: [number, number, number]; target: [number, number, number]; walk: boolean; name: string; id: string }) {
+    if (this.insideBarrier(new Vector3(...p.position))) return;
+    if (p.walk && this.walker) {
+      this.stopTour();
+      const yaw = Math.atan2(-(p.target[0] - p.position[0]), -(p.target[2] - p.position[2]));
+      this.setMode("walk");
+      this.walker.teleport(new Vector3(p.position[0], p.position[1] - DEFAULT_WALKER.eye, p.position[2]), yaw);
+      const d = new Vector3(...p.target).sub(new Vector3(...p.position));
+      this.walker.pitch = Math.max(-1.2, Math.min(1.2, Math.atan2(d.y, Math.hypot(d.x, d.z))));
+      return;
+    }
+    this.clipLevel(null);
+    this.goTo({ id: p.id, name: p.name, position: p.position, target: p.target });
+  }
+
+  /** Current camera view, for saving it as a place in the editor. */
+  currentView(): { position: [number, number, number]; target: [number, number, number]; walk: boolean } {
+    const pos = this.camera.position.clone();
+    if (this.mode === "walk") {
+      const dir = new Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+      return { position: pos.toArray() as [number, number, number], target: pos.clone().addScaledVector(dir, 3).toArray() as [number, number, number], walk: true };
+    }
+    return { position: pos.toArray() as [number, number, number], target: this.orbit.target.toArray() as [number, number, number], walk: false };
+  }
+
+  setPlaces(places: PublicConfig["places"], levels?: PublicConfig["levels"]) {
+    if (!this.config) return;
+    this.config = { ...this.config, places, ...(levels ? { levels } : {}) };
+    if (this.hudEl) this.buildHud();
+  }
+
   private updateHudState(level?: number) {
     const hud = this.hudEl;
     if (!hud) return;
@@ -919,7 +973,7 @@ export class ArchViewer {
     hud.querySelectorAll<HTMLButtonElement>("[data-a=walk]").forEach((b) => b.classList.toggle("on", this.mode === "walk"));
     hud.querySelectorAll<HTMLButtonElement>("[data-a=orbit]").forEach((b) => b.classList.toggle("on", this.mode === "orbit" && !this.tour));
     hud.querySelectorAll<HTMLButtonElement>("[data-a=tour]").forEach((b) => b.classList.toggle("on", !!this.tour));
-    if (level !== undefined) hud.querySelectorAll<HTMLButtonElement>("[data-lv]").forEach((b) => b.classList.toggle("on", +b.dataset.lv! === level));
+    if (level !== undefined) hud.querySelectorAll<HTMLButtonElement>("[data-lv],[data-place]").forEach((b) => b.classList.toggle("on", b.dataset.lv !== undefined && +b.dataset.lv === level));
     const q = hud.querySelector<HTMLButtonElement>(".av-q");
     if (q) q.textContent = `◐ ${this.quality === "auto" ? L("auto") : L(this.tier)}`;
     const hint = hud.querySelector<HTMLDivElement>(".av-hint");
@@ -1002,6 +1056,7 @@ function dirFrom(elevDeg: number, azDeg: number) {
   const e = (elevDeg * Math.PI) / 180, a = (azDeg * Math.PI) / 180;
   return new Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)).normalize();
 }
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 const isCoarse = () => typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
 void FrontSide; void Object3D;

@@ -16,16 +16,18 @@ export interface SiteData {
   hero: string | null; // image path
   levels: string[];
   hasTour: boolean;
+  /** Downloads grouped by folder. */
+  documents?: { folder: string; items: { title: string; href: string; ext: string; size: string; open: boolean }[] }[];
   buildId?: string;
 }
 
 const T = {
   de: { experience: "Erleben", project: "Projekt", gallery: "Galerie", highlights: "Highlights", walk: "Begehen", tour: "Rundgang starten",
     explore: "Gebäude in 3D erkunden", about: "Über das Projekt", by: "Entwurf", made: "Erstellt mit ARCHVISTA", credits: "Bildnachweise & Lizenzen",
-    noDesc: "", scroll: "Scrollen", enter: "Eintreten", facts: "Kennzahlen", measured: "aus dem 3D-Modell gemessen", fullscreen: "Vollbild" },
+    noDesc: "", scroll: "Scrollen", enter: "Eintreten", facts: "Kennzahlen", measured: "aus dem 3D-Modell gemessen", fullscreen: "Vollbild", docs: "Pläne & Unterlagen", docsAll: "Alle Dateien" },
   en: { experience: "Experience", project: "Project", gallery: "Gallery", highlights: "Highlights", walk: "Walk through", tour: "Start tour",
     explore: "Explore the building in 3D", about: "About the project", by: "Design", made: "Made with ARCHVISTA", credits: "Credits & licences",
-    noDesc: "", scroll: "Scroll", enter: "Enter", facts: "Key figures", measured: "measured from the 3D model", fullscreen: "Full screen" },
+    noDesc: "", scroll: "Scroll", enter: "Enter", facts: "Key figures", measured: "measured from the 3D model", fullscreen: "Full screen", docs: "Plans & documents", docsAll: "All files" },
 };
 
 export function esc(s: string): string {
@@ -61,6 +63,10 @@ img{max-width:100%;display:block}a{color:inherit}
 .gal figure{margin:0}.gal figcaption{font-size:.85em;opacity:.7;margin-top:.5em}
 .hl-n{display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex:none}
 .facts small{display:block;opacity:.6}
+.docs{display:grid;gap:28px}.docs h3{margin:0 0 10px}.docs ul{list-style:none;margin:0;padding:0}
+.docs a{display:flex;align-items:center;gap:14px;padding:13px 4px;text-decoration:none;border-bottom:1px solid var(--docline,rgba(0,0,0,.12))}
+.docs .ext{flex:none;min-width:46px;text-align:center;font:600 11px/1 system-ui,sans-serif;letter-spacing:.06em;padding:6px 7px;border-radius:5px;background:var(--accent);color:#fff}
+.docs .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.docs .sz{opacity:.55;font-size:.85em;white-space:nowrap}.docs .dl{opacity:.6;transition:transform .2s}.docs a:hover .dl{transform:translateY(2px);opacity:1}
 .skip{position:absolute;left:-999px}.skip:focus{left:8px;top:8px;z-index:9;background:#fff;color:#000;padding:8px}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 `;
@@ -75,6 +81,13 @@ function factList(d: SiteData, cls = "facts") {
   if (!d.facts.length) return "";
   return `<dl class="${cls}">${d.facts.map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(f.value)}</dd></div>`).join("")}</dl>`;
 }
+/** Download list, grouped by folder. Each design styles `.docs` itself. */
+function documents(d: SiteData) {
+  if (!d.documents?.length) return "";
+  return `<div class="docs">${d.documents.map((g) => `<div class="docs-g">${d.documents!.length > 1 || g.folder ? `<h3>${esc(g.folder)}</h3>` : ""}<ul>${g.items.map((it) =>
+    `<li><a href="${esc(it.href)}"${it.open ? ' target="_blank" rel="noopener"' : " download"}><span class="ext">${esc(it.ext)}</span><span class="tt">${esc(it.title)}</span><span class="sz">${esc(it.size)}</span><span class="dl" aria-hidden="true">↓</span></a></li>`).join("")}</ul></div>`).join("")}</div>`;
+}
+
 function footer(d: SiteData, t: (typeof T)["de"]) {
   return `<footer class="foot"><span>© ${d.year}${d.author ? " " + esc(d.author) : ""}</span><span><a href="credits.html">${t.credits}</a> · ${t.made}</span></footer>`;
 }
@@ -99,15 +112,17 @@ section{padding:96px 0;border-top:1px solid #eee}h2{font-size:13px;letter-spacin
 .two{display:grid;grid-template-columns:1fr 1.4fr;gap:64px}.two .txt{font-size:19px}
 .hls{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:40px}.hls li{display:flex;gap:16px}.hls h3{margin:2px 0 8px;font-size:19px;font-weight:600}.hl-f{color:#888;font-size:14px}
 .gal{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}.gal img{aspect-ratio:3/2;object-fit:cover;border-radius:4px}
+.docs{grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px}.docs h3{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#888;font-weight:500}.docs .ext{background:#151515}
 .foot{display:flex;justify-content:space-between;padding:40px 28px;color:#888;font-size:13px;max-width:1240px;margin:0 auto;border-top:1px solid #eee;flex-wrap:wrap;gap:8px}
 @media (max-width:760px){.two{grid-template-columns:1fr;gap:24px}nav a{display:none}section{padding:64px 0}}
 `)}
 <body><a class="skip" href="#erleben">3D</a>
-<nav class="wrap"><b>${esc(d.title)}</b><span><a href="#erleben">${t.experience}</a><a href="#projekt">${t.project}</a></span></nav>
+<nav class="wrap"><b>${esc(d.title)}</b><span><a href="#erleben">${t.experience}</a><a href="#projekt">${t.project}</a>${d.documents?.length ? `<a href="#plaene">${t.docs}</a>` : ""}</span></nav>
 <header class="wrap hero"><h1>${esc(d.title)}</h1>${d.description ? `<p>${esc(firstSentence(d.description))}</p>` : ""}<div class="cta">${actions(d, t)}</div>
 ${d.hero ? `<img class="heroimg" src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</header>
 <section id="erleben" class="wrap"><h2>${t.explore}</h2>${viewerBlock(d)}</section>
 <section id="projekt" class="wrap"><h2>${t.about}</h2><div class="two"><div>${factList(d)}<p style="color:#999;font-size:13px;margin-top:24px">${t.measured}</p></div><div class="txt">${paras(d.description)}${d.author ? `<p><small style="color:#888">${t.by}</small><br>${esc(d.author)}</p>` : ""}</div></div></section>
+${d.documents?.length ? `<section id="plaene" class="wrap"><h2>${t.docs}</h2>${documents(d)}</section>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 
@@ -133,6 +148,7 @@ h2{font-weight:400;font-size:clamp(30px,4vw,54px);margin:0 0 48px;line-height:1.
 .txt{max-width:62ch;font-size:20px;color:#cfc8ba}
 .hls{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1px;background:#2a2722;border:1px solid #2a2722}.hls li{background:#0b0b0c;padding:36px;display:flex;gap:18px}.hls h3{font-weight:400;font-size:24px;margin:0 0 10px}.hl-n{background:transparent;border:1px solid var(--accent);color:var(--accent)}.hl-f{color:#8d8576;font-size:14px}
 .gal{grid-template-columns:repeat(12,1fr);--gap:20px}.gal figure{grid-column:span 6}.gal figure:nth-child(3n+1){grid-column:span 12}.gal img{width:100%;aspect-ratio:16/9;object-fit:cover}
+.docs{--docline:#2a2722;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px}.docs h3{font:500 11px/1 "Inter",system-ui,sans-serif;letter-spacing:.24em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}.docs a{font-size:19px;padding:16px 0}.docs .ext{background:transparent;border:1px solid var(--accent);color:var(--accent)}
 .foot{display:flex;justify-content:space-between;padding:48px 6vw;color:#6d675c;font:13px "Inter",system-ui,sans-serif;border-top:1px solid #1d1b18;flex-wrap:wrap;gap:8px}.foot a{color:#a69b84}
 @media (max-width:760px){.gal figure{grid-column:span 12!important}section{padding:80px 6vw}}
 `)}
@@ -140,6 +156,7 @@ h2{font-weight:400;font-size:clamp(30px,4vw,54px);margin:0 0 48px;line-height:1.
 <header class="hero">${d.hero ? `<img src="${esc(d.hero)}" alt="">` : ""}<div class="in"><div class="kick">${d.author ? esc(d.author) : t.project}</div><h1>${esc(d.title)}</h1>${actions(d, t)}</div></header>
 <section id="erleben"><div class="line"></div><h2>${t.explore}</h2>${viewerBlock(d)}</section>
 <section id="projekt"><div class="line"></div><h2>${t.about}</h2>${factList(d)}<div class="txt">${paras(d.description)}</div></section>
+${d.documents?.length ? `<section id="plaene"><div class="line"></div><h2>${t.docs}</h2>${documents(d)}</section>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 
@@ -163,6 +180,7 @@ header.top a{text-decoration:none;margin-left:20px}
 .hls{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0;border-top:1px solid #000}.hls li{border-bottom:1px solid #000;padding:16px 16px 24px 0;display:flex;gap:14px}.hls h3{margin:0 0 6px;font-size:20px}.hl-n{border-radius:0;background:#000}.hl-f{font-size:13px}
 .gal{grid-template-columns:repeat(3,1fr);--gap:20px}.gal img{aspect-ratio:4/5;object-fit:cover;filter:grayscale(.1)}
 .viewer{height:min(80vh,820px)}
+.docs{--docline:#000;gap:32px}.docs h3{font-size:12px;text-transform:uppercase;font-weight:700;border-top:1px solid #000;padding-top:10px}.docs a{font-weight:700;font-size:17px}.docs .ext{border-radius:0;background:var(--accent)}
 .foot{display:flex;justify-content:space-between;border-top:2px solid #000;padding:16px 20px 40px;font-size:13px;font-weight:700;text-transform:uppercase;flex-wrap:wrap;gap:8px}
 @media (max-width:760px){.g>*{grid-column:1/-1!important}.gal{grid-template-columns:1fr}}
 `)}
@@ -171,6 +189,7 @@ header.top a{text-decoration:none;margin-left:20px}
 <div class="g hero"><h1>${esc(d.title)}</h1><div class="meta">${d.author ? `${t.by}<br><b>${esc(d.author)}</b><br>` : ""}${d.year}</div><div class="lead">${esc(firstSentence(d.description))}<div style="margin-top:20px">${actions(d, t)}</div></div>${d.hero ? `<img src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</div>
 <div id="erleben" class="g sec"><div class="num"><span>01</span></div><h2>${t.explore}</h2><div class="body">${viewerBlock(d)}</div></div>
 <div id="projekt" class="g sec"><div class="num"><span>02</span></div><h2>${t.about}</h2>${factList(d)}<div class="body cols">${paras(d.description)}</div></div>
+${d.documents?.length ? `<div id="plaene" class="g sec"><div class="num"><span>03</span></div><h2>${t.docs}</h2><div class="body">${documents(d)}</div></div>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 
@@ -196,6 +215,7 @@ h2{font-size:clamp(32px,4vw,52px);letter-spacing:-.03em;margin:0 0 24px;font-wei
 .facts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0}.facts div{background:#f6f4ff;border-radius:18px;padding:18px}.facts dt{font-size:13px;color:#6b6780}.facts dd{margin:6px 0 0;font-size:32px;font-weight:800;color:var(--accent)}
 .hls{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.hls li{background:#fff;border-radius:22px;padding:26px;display:flex;gap:14px;transition:transform .2s}.hls li:hover{transform:translateY(-4px) rotate(-.3deg)}.hls h3{margin:0 0 6px}.hl-f{color:#6b6780;font-size:14px}
 .gal{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));--gap:16px}.gal img{border-radius:22px;aspect-ratio:1;object-fit:cover}.gal figure:nth-child(2n) img{aspect-ratio:4/5}
+.docs{grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}.docs h3{font-size:15px;font-weight:800}.docs a{border:0;background:#f6f4ff;border-radius:14px;margin-bottom:8px;padding:12px 14px}.docs a:hover{background:#ece8ff}.docs .ext{border-radius:99px}
 .foot{display:flex;justify-content:space-between;max-width:1280px;margin:40px auto;padding:0 24px;color:#6b6780;font-size:14px;flex-wrap:wrap;gap:8px}
 @media (max-width:860px){.hero,.grid2{grid-template-columns:1fr}.hero .card.c1{min-height:380px}.card{padding:28px}}
 `)}
@@ -204,6 +224,7 @@ h2{font-size:clamp(32px,4vw,52px);letter-spacing:-.03em;margin:0 0 24px;font-wei
 <div class="wrap hero"><div class="card c1"><div><span class="tag">${d.author ? esc(d.author) : t.project} · ${d.year}</span><h1>${esc(d.title)}</h1></div><div>${actions(d, t)}</div></div><div class="card imgc">${d.hero ? `<img src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</div></div>
 <section id="erleben" class="wrap"><div class="card"><h2>${t.explore}</h2>${viewerBlock(d)}</div></section>
 <section id="projekt" class="wrap grid2"><div class="card"><h2>${t.about}</h2>${paras(d.description)}</div><div class="card"><h2>${t.facts}</h2>${factList(d)}<p style="color:#6b6780;font-size:13px">${t.measured}</p></div></section>
+${d.documents?.length ? `<section id="plaene" class="wrap"><div class="card"><h2>${t.docs}</h2>${documents(d)}</div></section>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 
@@ -228,14 +249,16 @@ h2{font-weight:400;font-style:italic;font-size:clamp(34px,4vw,56px);text-align:c
 .facts{margin:0;font-family:"Inter",system-ui,sans-serif}.facts div{display:flex;justify-content:space-between;border-bottom:1px solid #d4ccb9;padding:16px 0}.facts dt{color:#6c6650}.facts dd{margin:0;font-weight:600}
 .hls{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:28px}.hls li{background:#faf7f0;border-radius:18px;padding:30px;display:flex;gap:16px}.hls h3{font-weight:400;font-size:24px;margin:0 0 8px}.hl-f{font:13px "Inter",system-ui,sans-serif;color:#8a836b}
 .gal{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));--gap:28px}.gal img{border-radius:18px;aspect-ratio:4/5;object-fit:cover}.gal figure:nth-child(odd){margin-top:48px}
+.docs{--docline:#d4ccb9;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px;font-family:"Inter",system-ui,sans-serif}.docs h3{font:400 italic 26px "Iowan Old Style",Georgia,serif}.docs .ext{border-radius:99px}
 .foot{display:flex;justify-content:space-between;padding:40px 28px;max-width:1180px;margin:0 auto;font:13px "Inter",system-ui,sans-serif;color:#8a836b;border-top:1px solid #d4ccb9;flex-wrap:wrap;gap:8px}
 @media (max-width:820px){.two{grid-template-columns:1fr;gap:32px}.gal figure:nth-child(odd){margin-top:0}}
 `)}
 <body>
-<nav><a href="#erleben">${t.experience}</a><a href="#projekt">${t.project}</a></nav>
+<nav><a href="#erleben">${t.experience}</a><a href="#projekt">${t.project}</a>${d.documents?.length ? `<a href="#plaene">${t.docs}</a>` : ""}</nav>
 <header class="wrap hero"><div class="k">${d.author ? esc(d.author) : t.project}</div><h1>${esc(d.title)}</h1>${actions(d, t)}${d.hero ? `<img src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</header>
 <section id="erleben" class="wrap">${LEAF}<h2>${t.explore}</h2>${viewerBlock(d)}</section>
 <section id="projekt" class="wrap">${LEAF}<h2>${t.about}</h2><div class="two"><div>${paras(d.description)}</div><div>${factList(d)}<p style="font:13px Inter,system-ui,sans-serif;color:#8a836b">${t.measured}</p></div></div></section>
+${d.documents?.length ? `<section id="plaene" class="wrap">${LEAF}<h2>${t.docs}</h2>${documents(d)}</section>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 const LEAF = `<svg class="leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M5 19C5 10 11 4 20 4c0 9-6 15-15 15Z"/><path d="M5 19 14 10"/></svg>`;
@@ -261,11 +284,13 @@ h2 em{color:var(--accent);font-style:normal}
 .txt{font-size:22px;max-width:60ch;color:#cfcfcf}
 .hls{list-style:none;padding:0;margin:0;counter-reset:x}.hls li{display:flex;gap:20px;padding:28px 0;border-top:1px solid #222}.hls h3{margin:0 0 6px;font-size:24px}.hl-n{background:none;border:1px solid var(--accent);color:var(--accent)}.hl-f{opacity:.6;font-size:14px}
 .gal{grid-template-columns:1fr;--gap:6px}.gal img{width:100%;aspect-ratio:2.39/1;object-fit:cover}.gal figcaption{padding:8px 0 20px}
+.docs{--docline:#222;gap:36px}.docs h3{font-size:12px;letter-spacing:.2em;text-transform:uppercase;opacity:.6;font-weight:600}.docs a{font-size:20px;font-weight:700;padding:18px 0}.docs .ext{background:none;border:1px solid var(--accent);color:var(--accent);border-radius:2px}
 .foot{display:flex;justify-content:space-between;padding:40px 5vw;color:#777;font-size:13px;border-top:1px solid #222;flex-wrap:wrap;gap:8px}
 `)}
 <body>
 <div class="stage bars" id="erleben">${viewerBlock(d, { cinematic: true })}<div class="title"><div class="k">${d.author ? esc(d.author) : t.project}</div><h1>${esc(d.title)}</h1><div class="cta">${actions(d, t)}</div></div><div class="scroll">${t.scroll} ↓</div></div>
 <section id="projekt"><h2>${t.about.split(" ").slice(0, -1).join(" ")} <em>${t.about.split(" ").slice(-1)[0]}</em></h2>${factList(d)}<div class="txt">${paras(d.description)}</div></section>
+${d.documents?.length ? `<section id="plaene"><h2>${t.docs}</h2>${documents(d)}</section>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 

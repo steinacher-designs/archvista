@@ -36,7 +36,7 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with: { workspaces: src-tauri }
       - run: npm ci
-      - run: npx tauri build
+      - run: npx tauri build -c '{"bundle":{"createUpdaterArtifacts":false}}'
         env:
           VITE_GITHUB_CLIENT_ID: ${{ vars.ARCHVISTA_OAUTH_CLIENT_ID }}
       - uses: actions/upload-artifact@v4

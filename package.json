@@ -1,6 +1,6 @@
 {
   "name": "archvista",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "ARCHVISTA – 3D-DXF zu interaktiver Architektur-Website",
   "main": "index.js",
   "scripts": {
@@ -12,13 +12,15 @@
     "tauri": "tauri"
   },
   "keywords": [],
-  "author": "",
+  "author": "Judith Steinacher",
   "license": "ISC",
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-http": "^2.8.3",
     "@tauri-apps/plugin-opener": "^2.7.2",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "three": "^0.187.0",

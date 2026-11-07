@@ -69,6 +69,7 @@ export function Work() {
           {a.entrance ? t.entranceFound : t.entranceMissing}<br />
           {model.stats.triangles.toLocaleString()} {lang === "de" ? "Dreiecke" : "triangles"}
         </div>
+        <div className="credit small">ARCHVISTA · Judith Steinacher</div>
       </nav>
       <main className="stage">
         <div className="v" ref={host} style={{ visibility: step === "preview" && previewMode !== "3d" ? "hidden" : "visible" }} data-testid="viewer" />

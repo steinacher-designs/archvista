@@ -412,5 +412,322 @@
     "licence": "CC0 1.0",
     "url": "https://polyhaven.com/a/spiaggia_di_mondello",
     "dimensions_mm": null
+  },
+  "marble_white": {
+    "source": "ambientCG",
+    "id": "Marble012",
+    "name": "Marble012",
+    "kind": "texture",
+    "authors": [
+      "ambientCG (Lennart Demes)"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://ambientcg.com/view?id=Marble012",
+    "dimensions_mm": [
+      2000,
+      2000
+    ]
+  },
+  "terrazzo": {
+    "source": "ambientCG",
+    "id": "Terrazzo006",
+    "name": "Terrazzo006",
+    "kind": "texture",
+    "authors": [
+      "ambientCG (Lennart Demes)"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://ambientcg.com/view?id=Terrazzo006",
+    "dimensions_mm": [
+      1500,
+      1500
+    ]
+  },
+  "slate_floor": {
+    "polyhaven_id": "slate_floor",
+    "name": "Slate Floor",
+    "kind": "texture",
+    "authors": [
+      "Dimitrios Savva"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/slate_floor",
+    "dimensions_mm": [
+      2289.9999618530273,
+      2290.0002002716064
+    ]
+  },
+  "herringbone": {
+    "polyhaven_id": "herringbone_parquet",
+    "name": "Herringbone Parquet",
+    "kind": "texture",
+    "authors": [
+      "Jenelle van Heerden",
+      "Sergej Majboroda"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/herringbone_parquet",
+    "dimensions_mm": [
+      3400.0000953674316,
+      3400.0000953674316
+    ]
+  },
+  "walnut": {
+    "polyhaven_id": "european_walnut_veneer_04",
+    "name": "European Walnut Veneer 04",
+    "kind": "texture",
+    "authors": [
+      "Jenelle van Heerden"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/european_walnut_veneer_04",
+    "dimensions_mm": [
+      1000,
+      1000
+    ]
+  },
+  "light_oak": {
+    "polyhaven_id": "white_oak_veneer",
+    "name": "White Oak Veneer",
+    "kind": "texture",
+    "authors": [
+      "Jenelle van Heerden"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/white_oak_veneer",
+    "dimensions_mm": [
+      500,
+      500
+    ]
+  },
+  "smoked_oak": {
+    "polyhaven_id": "mocha_oak_veneer",
+    "name": "Mocha Oak Veneer",
+    "kind": "texture",
+    "authors": [
+      "Jenelle van Heerden"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/mocha_oak_veneer",
+    "dimensions_mm": [
+      1000,
+      1000
+    ]
+  },
+  "larch_cladding": {
+    "polyhaven_id": "japanese_cedar_planks",
+    "name": "Japanese Cedar Planks",
+    "kind": "texture",
+    "authors": [
+      "Charlotte Baglioni",
+      "Rico Cilliers"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/japanese_cedar_planks",
+    "dimensions_mm": [
+      1130.000114440918,
+      1130.000114440918
+    ]
+  },
+  "white_tiles": {
+    "polyhaven_id": "long_white_tiles",
+    "name": "Long White Tiles",
+    "kind": "texture",
+    "authors": [
+      "Jenelle van Heerden",
+      "Sergej Majboroda"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/long_white_tiles",
+    "dimensions_mm": [
+      1269.9999809265137,
+      1269.9999809265137
+    ]
+  },
+  "granite_dark": {
+    "polyhaven_id": "granite_tile_03",
+    "name": "Granite Tile 03",
+    "kind": "texture",
+    "authors": [
+      "Charlotte Baglioni"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/granite_tile_03",
+    "dimensions_mm": [
+      1802.0000457763672,
+      1802.0000457763672
+    ]
+  },
+  "concrete_smooth": {
+    "polyhaven_id": "concrete_wall_003",
+    "name": "Concrete Wall 003",
+    "kind": "texture",
+    "authors": [
+      "Dimitrios Savva",
+      "Rico Cilliers"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/concrete_wall_003",
+    "dimensions_mm": [
+      3000,
+      3000.000238418579
+    ]
+  },
+  "concrete_floor": {
+    "polyhaven_id": "concrete_floor_02",
+    "name": "Concrete Floor 02",
+    "kind": "texture",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/concrete_floor_02",
+    "dimensions_mm": [
+      2000,
+      2000
+    ]
+  },
+  "painted_concrete": {
+    "polyhaven_id": "painted_concrete_02",
+    "name": "Painted Concrete 02",
+    "kind": "texture",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/painted_concrete_02",
+    "dimensions_mm": [
+      4000,
+      4000
+    ]
+  },
+  "white_brick": {
+    "polyhaven_id": "white_bricks",
+    "name": "White Bricks",
+    "kind": "texture",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/white_bricks",
+    "dimensions_mm": [
+      1500,
+      1500
+    ]
+  },
+  "dark_brick": {
+    "polyhaven_id": "dark_brick_wall",
+    "name": "Dark Brick Wall",
+    "kind": "texture",
+    "authors": [
+      "Dario Barresi",
+      "Dimitrios Savva"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/dark_brick_wall",
+    "dimensions_mm": [
+      1049.9998331069946,
+      1049.9999523162842
+    ]
+  },
+  "sandstone": {
+    "polyhaven_id": "large_sandstone_blocks",
+    "name": "Large Sandstone Blocks",
+    "kind": "texture",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/large_sandstone_blocks",
+    "dimensions_mm": [
+      3000,
+      3000.000238418579
+    ]
+  },
+  "stucco": {
+    "polyhaven_id": "white_stucco",
+    "name": "White Stucco",
+    "kind": "texture",
+    "authors": [
+      "Amal Kumar"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/white_stucco",
+    "dimensions_mm": [
+      1998.0629682540894,
+      1998.0640411376953
+    ]
+  },
+  "plaster_grey": {
+    "polyhaven_id": "grey_plaster",
+    "name": "Grey Plaster",
+    "kind": "texture",
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/grey_plaster",
+    "dimensions_mm": [
+      1000,
+      1000
+    ]
+  },
+  "corten": {
+    "polyhaven_id": "rust_coarse_01",
+    "name": "Rust Coarse 01",
+    "kind": "texture",
+    "authors": [
+      "Dimitrios Savva",
+      "Rico Cilliers"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/rust_coarse_01",
+    "dimensions_mm": [
+      2199.9998092651367,
+      2200.000286102295
+    ]
+  },
+  "metal_sheet": {
+    "polyhaven_id": "box_profile_metal_sheet",
+    "name": "Box Profile Metal Sheet",
+    "kind": "texture",
+    "authors": [
+      "Amal Kumar"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/box_profile_metal_sheet",
+    "dimensions_mm": [
+      2000,
+      2000
+    ]
+  },
+  "gravel": {
+    "polyhaven_id": "gravel",
+    "name": "Gravel",
+    "kind": "texture",
+    "authors": [
+      "Dimitrios Savva"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://polyhaven.com/a/gravel",
+    "dimensions_mm": [
+      2000,
+      2000
+    ]
+  },
+  "marble_black": {
+    "source": "ambientCG",
+    "id": "Marble006",
+    "name": "Marble006",
+    "kind": "texture",
+    "authors": [
+      "ambientCG (Lennart Demes)"
+    ],
+    "licence": "CC0 1.0",
+    "url": "https://ambientcg.com/view?id=Marble006",
+    "dimensions_mm": [
+      2000,
+      2000
+    ]
   }
 }

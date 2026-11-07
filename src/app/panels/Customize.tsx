@@ -1,15 +1,17 @@
 import { useMemo } from "react";
 import { useStore, type Tab, presetLabel } from "../store";
 import { ENVIRONMENTS, TEMPLATES, type Lighting, type Quality, type EnvironmentId, type TemplateId } from "../../core/project";
-import { PRESETS, PRESET } from "../../core/materials";
+import { PRESETS, PRESET, GROUP_LABEL, type MaterialGroup } from "../../core/materials";
 import { CATEGORY_LABEL } from "../../core/analysis/classify";
 import { UNIT_CHOICES } from "../../core/dxf/import";
 import { AreasEditor } from "./Areas";
 import { HotspotsEditor } from "./Hotspots";
+import { PlacesEditor } from "./Places";
+import { DocumentsEditor } from "./Documents";
 
 export function CustomizePanel(props: { onPlaceHotspot(): void; selectedHotspot: string | null; onSelectHotspot(id: string | null): void }) {
   const { t, tab, setTab } = useStore();
-  const tabs: [Tab, string][] = [["environment", t.tabEnvironment], ["light", t.tabLight], ["design", t.tabDesign], ["project", t.tabProject], ["areas", t.tabAreas], ["hotspots", t.tabHotspots], ["materials", t.tabMaterials]];
+  const tabs: [Tab, string][] = [["environment", t.tabEnvironment], ["light", t.tabLight], ["design", t.tabDesign], ["project", t.tabProject], ["documents", useStore.getState().lang === "de" ? "Pläne" : "Plans"], ["areas", t.tabAreas], ["places", t.tabPlaces], ["hotspots", t.tabHotspots], ["materials", t.tabMaterials]];
   return (
     <>
       <div className="head"><h2>{t.stepCustomize}</h2></div>
@@ -22,6 +24,8 @@ export function CustomizePanel(props: { onPlaceHotspot(): void; selectedHotspot:
         {tab === "areas" && <AreasEditor />}
         {tab === "hotspots" && <HotspotsEditor onPlace={props.onPlaceHotspot} selected={props.selectedHotspot} onSelect={props.onSelectHotspot} />}
         {tab === "materials" && <Materials />}
+        {tab === "places" && <PlacesEditor />}
+        {tab === "documents" && <DocumentsEditor />}
       </div>
     </>
   );
@@ -168,16 +172,28 @@ function Materials() {
       <p className="intro">{t.materialsIntro}</p>
       {groups.map((g) => {
         const cur = project!.materialOverrides[g.key] ?? g.auto;
+        const colour = project!.materialColors?.[g.key];
         const pr = PRESET.get(cur)!;
+        const thumb = pr.texture !== "none" ? `url(/assets-lib/tex/${cur}_col.webp) center/180% , ${colour ?? pr.color}` : colour ?? pr.color;
         return (
           <div className="mat" key={g.key}>
-            <div className="swatch" style={{ background: pr.color }} />
+            <div className="swatch" style={{ background: thumb, boxShadow: colour ? `inset 0 0 0 40px ${colour}55` : undefined }} />
             <div>
               <b>{g.layer} {roleName[g.role] ? `· ${roleName[g.role]}` : ""}</b>
-              <small>{CATEGORY_LABEL[g.category as keyof typeof CATEGORY_LABEL]?.[lang]} · {project!.materialOverrides[g.key] ? t.basisUser : basis[g.reason]}</small>
-              <select className="select" value={cur} onChange={(e) => update((p) => { if (e.target.value === g.auto) delete p.materialOverrides[g.key]; else p.materialOverrides[g.key] = e.target.value; })}>
-                {PRESETS.map((x) => <option key={x.id} value={x.id}>{presetLabel(x.id, lang)}</option>)}
-              </select>
+              <small>{CATEGORY_LABEL[g.category as keyof typeof CATEGORY_LABEL]?.[lang]} · {project!.materialOverrides[g.key] || colour ? t.basisUser : basis[g.reason]}</small>
+              <div className="matrow">
+                <select className="select" value={cur} onChange={(e) => update((p) => { if (e.target.value === g.auto) delete p.materialOverrides[g.key]; else p.materialOverrides[g.key] = e.target.value; })}>
+                  {(Object.keys(GROUP_LABEL) as MaterialGroup[]).map((grp) => (
+                    <optgroup key={grp} label={GROUP_LABEL[grp][lang]}>
+                      {PRESETS.filter((x) => x.group === grp).map((x) => <option key={x.id} value={x.id}>{presetLabel(x.id, lang)}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+                <label className="colorpick" title={lang === "de" ? "Eigene Farbe" : "Own colour"}>
+                  <input type="color" value={colour ?? pr.color} onChange={(e) => update((p) => { p.materialColors = { ...(p.materialColors ?? {}), [g.key]: e.target.value }; }, { coalesce: "col-" + g.key })} />
+                </label>
+                {colour && <button className="iconbtn" title={lang === "de" ? "Farbe zurücksetzen" : "Reset colour"} onClick={() => update((p) => { if (p.materialColors) delete p.materialColors[g.key]; })}>×</button>}
+              </div>
             </div>
           </div>
         );

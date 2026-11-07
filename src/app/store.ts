@@ -11,7 +11,7 @@ import { STRINGS, type Strings } from "./i18n";
 
 export type Screen = "home" | "processing" | "work" | "failed";
 export type Step = "customize" | "preview" | "publish";
-export type Tab = "environment" | "light" | "design" | "areas" | "hotspots" | "materials" | "project";
+export type Tab = "environment" | "light" | "design" | "areas" | "places" | "hotspots" | "materials" | "project" | "documents";
 
 type ModelMeta = Omit<ImportedModel, "meshes">;
 

@@ -132,6 +132,32 @@ fn project_delete(app: AppHandle, id: String) -> Result<(), String> {
     Ok(())
 }
 
+// ——— project documents (plans, details …) ———
+
+#[tauri::command]
+fn doc_save(app: AppHandle, request: Request) -> Result<(), String> {
+    let id = header(&request, "x-id")?;
+    let doc = header(&request, "x-doc")?;
+    let dir = projects_dir(&app)?.join(safe_id(&id)?).join("docs");
+    fs::create_dir_all(&dir).map_err(err)?;
+    fs::write(dir.join(safe_id(&doc)?), body(&request)?).map_err(err)
+}
+
+#[tauri::command]
+fn doc_load(app: AppHandle, id: String, doc: String) -> Result<tauri::ipc::Response, String> {
+    let p = projects_dir(&app)?.join(safe_id(&id)?).join("docs").join(safe_id(&doc)?);
+    Ok(tauri::ipc::Response::new(fs::read(p).map_err(err)?))
+}
+
+#[tauri::command]
+fn doc_delete(app: AppHandle, id: String, doc: String) -> Result<(), String> {
+    let p = projects_dir(&app)?.join(safe_id(&id)?).join("docs").join(safe_id(&doc)?);
+    if p.exists() {
+        fs::remove_file(p).map_err(err)?;
+    }
+    Ok(())
+}
+
 // ——— website export ———
 
 /// Writes one file of the generated website below the folder the user picked.
@@ -232,6 +258,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(Preview::default())
         .register_uri_scheme_protocol("preview", |ctx, request| {
             let state = ctx.app_handle().state::<Preview>();
@@ -258,7 +286,10 @@ pub fn run() {
             secret_get,
             secret_delete,
             benchmark_append,
-            startup_file
+            startup_file,
+            doc_save,
+            doc_load,
+            doc_delete
         ])
         .run(tauri::generate_context!())
         .expect("error while running ARCHVISTA");

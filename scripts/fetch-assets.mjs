@@ -28,6 +28,29 @@ export const TEXTURES = {
   roof_slate: "roof_slates_02",
   grass: "acg:Grass001:2.0", // ambientCG (CC0) — Poly Haven has no lush lawn
   natural_stone: "sandstone_blocks_05",
+  // more choices (v1.1)
+  marble_white: "acg:Marble012:2.0",
+  marble_black: "acg:Marble006:2.0",
+  terrazzo: "acg:Terrazzo006:1.5",
+  slate_floor: "slate_floor",
+  herringbone: "herringbone_parquet",
+  walnut: "european_walnut_veneer_04",
+  light_oak: "white_oak_veneer",
+  smoked_oak: "mocha_oak_veneer",
+  larch_cladding: "japanese_cedar_planks",
+  white_tiles: "long_white_tiles",
+  granite_dark: "granite_tile_03",
+  concrete_smooth: "concrete_wall_003",
+  concrete_floor: "concrete_floor_02",
+  painted_concrete: "painted_concrete_02",
+  white_brick: "white_bricks",
+  dark_brick: "dark_brick_wall",
+  sandstone: "large_sandstone_blocks",
+  stucco: "white_stucco",
+  plaster_grey: "grey_plaster",
+  corten: "rust_coarse_01",
+  metal_sheet: "box_profile_metal_sheet",
+  gravel: "gravel",
   // environment grounds
   env_sand: "coast_sand_01",
   env_asphalt: "asphalt_02",
@@ -93,7 +116,8 @@ async function ambientcg(key, spec, dest) {
   const f = (s) => path.join(dir, `${id}_2K-JPG_${s}.jpg`);
   await sharp(f("Color")).webp({ quality: 80 }).toFile(dest + "_col.webp");
   await sharp(f("NormalGL")).resize(1024, 1024).webp({ quality: 88 }).toFile(dest + "_nor.webp");
-  const ao = await sharp(f("AmbientOcclusion")).resize(1024, 1024).greyscale().raw().toBuffer();
+  // polished materials (marble, terrazzo) come without an AO map → no occlusion (white)
+  const ao = existsSync(f("AmbientOcclusion")) ? await sharp(f("AmbientOcclusion")).resize(1024, 1024).greyscale().raw().toBuffer() : Buffer.alloc(1024 * 1024, 255);
   const ro = await sharp(f("Roughness")).resize(1024, 1024).greyscale().raw().toBuffer();
   const arm = Buffer.alloc(1024 * 1024 * 3);
   for (let i = 0; i < 1024 * 1024; i++) { arm[i * 3] = ao[i]; arm[i * 3 + 1] = ro[i]; arm[i * 3 + 2] = 0; }

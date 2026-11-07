@@ -21,10 +21,18 @@ jobs:
         with: { workspaces: src-tauri }
       - run: npm ci
       - run: npm test
+      - name: Check signing key
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
+            echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY fehlt – ohne ihn funktionieren automatische Updates nicht."; exit 1; fi
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GITHUB_CLIENT_ID: ${{ vars.ARCHVISTA_OAUTH_CLIENT_ID }}
+          # signs the update package so installed apps accept it (see docs/ENTWICKLUNG.md)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           tagName: v__VERSION__
           releaseName: "ARCHVISTA v__VERSION__"
@@ -34,5 +42,6 @@ jobs:
             - **ARCHVISTA_…_x64_de-DE.msi** – für IT-Abteilungen / zentrale Verteilung.
 
             Keine weiteren Programme nötig (kein AutoCAD, Blender oder Python). Windows 10/11, 64 Bit.
-          releaseDraft: true
+          releaseDraft: false
+          includeUpdaterJson: true
           prerelease: false

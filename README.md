@@ -21,6 +21,10 @@ Unter **Releases** liegt `ARCHVISTA_x.y.z_x64-setup.exe` (empfohlen) bzw. die `.
 - [Funktionsstatus (ehrlich)](docs/STATUS.md)
 - [Lizenzen von Drittanbietern](THIRD_PARTY_NOTICES.md)
 
+## Autorin
+
+ARCHVISTA wurde von **Judith Steinacher** entwickelt.
+
 ## Lizenz
 
 ARCHVISTA: MIT-Lizenz (siehe `LICENSE`). Mitgelieferte Umgebungs-Fotos, Texturen und Pflanzenmodelle: CC0 (Poly Haven, ambientCG).

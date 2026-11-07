@@ -1,13 +1,13 @@
 // ARCHVISTA — build the public, privacy-safe scene (GLB + JSON) that the website loads.
 
 import type { PreparedScene } from "../scene";
-import type { Project, Hotspot, Viewpoint, EnvironmentId, Quality, Lighting } from "../project";
+import type { Project, Hotspot, Viewpoint, EnvironmentId, Quality, Lighting, Place } from "../project";
 import { Zone, removeGreyGeometry, pointInZone } from "../zones";
-import { PRESET, MaterialPreset } from "../materials";
+import { PRESET, MaterialPreset, withColour } from "../materials";
 import { writeGlb } from "./glb";
 import { cellOf } from "../analysis/spatial";
 
-export interface PublicLevel { name: { de: string; en: string }; elevation: number; spawn: [number, number, number] | null }
+export interface PublicLevel { name: { de: string; en: string }; elevation: number; spawn: [number, number, number] | null; hidden?: boolean }
 
 export interface PublicConfig {
   format: "archvista-scene";
@@ -29,6 +29,8 @@ export interface PublicConfig {
   viewpoints: Viewpoint[];
   tour: boolean;
   materials: Record<string, MaterialPreset>;
+  /** User-defined places (after the storeys in the visitor's list). */
+  places: Place[];
   /** Interior light positions (evening scenes); never inside hidden areas. */
   lights: [number, number, number][];
 }
@@ -45,7 +47,7 @@ export function publicParts(scene: PreparedScene, project: Project) {
   const byId = new Map(scene.parts.map((p) => [p.id, p]));
   const parts = cut.meshes.map((m) => {
     const part = byId.get(m.id)!;
-    const presetId = project.materialOverrides[part.key] ?? part.auto.presetId;
+    const presetId = withColour(project.materialOverrides[part.key] ?? part.auto.presetId, project.materialColors?.[part.key]);
     const uvs = m.positions === part.positions ? part.uvs : boxUV(m.positions, m.normals);
     return { presetId, positions: m.positions, normals: m.normals, uvs, indices: m.indices };
   });
@@ -86,7 +88,9 @@ export function publicConfig(scene: PreparedScene, project: Project, usedPresets
         if (!blockedAny([x, pt[1] + 0.5, z], 0.4)) spawn = pt;
       }
     }
-    return { name: p.level.name, elevation: p.level.elevation, spawn };
+    const custom = project.levelNames?.[p.level.index]?.trim();
+    const name = custom ? { de: custom, en: custom } : p.level.name;
+    return { name, elevation: p.level.elevation, spawn, hidden: project.hiddenLevels?.includes(p.level.index) || undefined };
   });
 
   // 3) hotspots & viewpoints that would reveal hidden or restricted areas are dropped
@@ -116,6 +120,8 @@ export function publicConfig(scene: PreparedScene, project: Project, usedPresets
     levels: levels.filter((l) => l.spawn),
     barriers: red.map((z) => ({ polygon: z.polygon, yMin: z.yMin, yMax: z.yMax })),
     hotspots, viewpoints, tour: project.tour, materials, lights,
+    // places inside hidden or restricted areas would reveal or bypass them → dropped
+    places: (project.places ?? []).filter((pl) => pl.name.trim() && !blockedAny(pl.position, 0.3)),
   };
 }
 

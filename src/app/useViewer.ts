@@ -34,7 +34,7 @@ export function useViewer(host: React.RefObject<HTMLDivElement | null>, scene: P
 
   // geometry: rebuild when the scene, hidden areas or materials change
   const greyKey = project ? JSON.stringify(project.zones.filter((z) => z.kind === "grey")) : "";
-  const matKey = project ? JSON.stringify(project.materialOverrides) : "";
+  const matKey = project ? JSON.stringify([project.materialOverrides, project.materialColors]) : "";
   useEffect(() => {
     const v = viewer.current;
     if (!v || !scene || !project) return;
@@ -58,6 +58,12 @@ export function useViewer(host: React.RefObject<HTMLDivElement | null>, scene: P
   const hsKey = project ? JSON.stringify(project.hotspots) : "";
   useEffect(() => { if (project) viewer.current?.setHotspots(project.hotspots); }, [hsKey]);
   useEffect(() => { viewer.current?.setLanguage(opts.lang); }, [opts.lang]);
+  const placesKey = project ? JSON.stringify([project.places, project.levelNames, project.hiddenLevels]) : "";
+  useEffect(() => {
+    if (!project || !scene) return;
+    const cfg = publicConfig(scene, project, new Set());
+    viewer.current?.setPlaces(cfg.places, cfg.levels);
+  }, [placesKey]);
   useEffect(() => { viewer.current?.setCinematic(project?.template === "cinema"); }, [project?.template]);
   return viewer;
 }

@@ -50,6 +50,72 @@
   },
   "env_paving": {
    "size": 2.24
+  },
+  "marble_white": {
+   "size": 2
+  },
+  "terrazzo": {
+   "size": 1.5
+  },
+  "slate_floor": {
+   "size": 2.29
+  },
+  "herringbone": {
+   "size": 3.4
+  },
+  "walnut": {
+   "size": 1
+  },
+  "light_oak": {
+   "size": 0.5
+  },
+  "smoked_oak": {
+   "size": 1
+  },
+  "larch_cladding": {
+   "size": 1.13
+  },
+  "white_tiles": {
+   "size": 1.27
+  },
+  "granite_dark": {
+   "size": 1.802
+  },
+  "concrete_smooth": {
+   "size": 3
+  },
+  "concrete_floor": {
+   "size": 2
+  },
+  "painted_concrete": {
+   "size": 4
+  },
+  "white_brick": {
+   "size": 1.5
+  },
+  "dark_brick": {
+   "size": 1.05
+  },
+  "sandstone": {
+   "size": 3
+  },
+  "stucco": {
+   "size": 1.998
+  },
+  "plaster_grey": {
+   "size": 1
+  },
+  "corten": {
+   "size": 2.2
+  },
+  "metal_sheet": {
+   "size": 2
+  },
+  "gravel": {
+   "size": 2
+  },
+  "marble_black": {
+   "size": 2
   }
  },
  "hdri": {

@@ -31,6 +31,28 @@ export interface Viewpoint {
   level?: number;
 }
 
+/** A named spot the visitor can jump to (shown in the list next to the storeys). */
+export interface Place {
+  id: string;
+  name: string;
+  position: [number, number, number];
+  target: [number, number, number];
+  /** Eye level, first-person (true) or bird's-eye orbit view (false). */
+  walk: boolean;
+}
+
+/** A downloadable file on the website (plan, detail, specification …). Bytes are stored next to the project. */
+export interface ProjectDocument {
+  id: string;
+  /** Group heading on the website, e.g. "Pläne", "Details". */
+  folder: string;
+  /** Display name. */
+  title: string;
+  fileName: string;
+  size: number;
+  addedAt: string;
+}
+
 export interface ProjectImage { name: string; dataUrl: string; caption?: string }
 
 export interface Project {
@@ -54,8 +76,18 @@ export interface Project {
   /** Hotspot suggestions the user removed (so they are not re-added). */
   dismissedHotspots: string[];
   materialOverrides: Record<string, string>; // part key → preset id
+  /** Optional user colour per part key (hex). */
+  materialColors?: Record<string, string>;
   viewpoints: Viewpoint[];
+  /** User-defined places, shown after the storeys. */
+  places?: Place[];
+  /** Custom names for detected storeys (index → name). */
+  levelNames?: Record<number, string>;
+  /** Storeys not shown in the list. */
+  hiddenLevels?: number[];
   images: ProjectImage[];
+  /** Plans, details and other downloads shown on the website. */
+  documents?: ProjectDocument[];
   tour: boolean;
   publish: { owner?: string; repo?: string; url?: string; lastUploadAt?: string; lastLiveAt?: string };
   updatedAt: string;

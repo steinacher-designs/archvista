@@ -17,7 +17,21 @@ export interface MaterialPreset {
   ior?: number;
   clearcoat?: number;
   opacity?: number;
+  /** Group shown in the material picker. */
+  group?: MaterialGroup;
+  /** Paint-like: a user colour replaces the base colour completely (otherwise it tints the photo texture). */
+  paintable?: boolean;
+  /** Texture library key when it differs from id (colour variants). */
+  tex?: string;
 }
+
+export type MaterialGroup = "wall" | "floor" | "wood" | "stone" | "roof" | "metal" | "glass" | "outdoor";
+
+export const GROUP_LABEL: Record<MaterialGroup, { de: string; en: string }> = {
+  wall: { de: "Wand & Putz", en: "Walls & plaster" }, floor: { de: "Boden", en: "Floors" }, wood: { de: "Holz", en: "Wood" },
+  stone: { de: "Stein & Beton", en: "Stone & concrete" }, roof: { de: "Dach", en: "Roof" }, metal: { de: "Metall", en: "Metal" },
+  glass: { de: "Glas", en: "Glass" }, outdoor: { de: "Außen", en: "Outdoor" },
+};
 
 export const PRESETS: MaterialPreset[] = [
   { id: "plaster_white", label: { de: "Putz weiß", en: "White plaster" }, color: "#d6d0c6", roughness: 0.92, metalness: 0, texture: "plaster", scale: 2.5 },
@@ -37,9 +51,70 @@ export const PRESETS: MaterialPreset[] = [
   { id: "grass", label: { de: "Rasen", en: "Lawn" }, color: "#4f6b2c", roughness: 0.95, metalness: 0, texture: "grass", scale: 2 },
   { id: "lacquer_white", label: { de: "Lack weiß", en: "White lacquer" }, color: "#f1f0ee", roughness: 0.38, metalness: 0, texture: "none", scale: 1, clearcoat: 0.3 },
   { id: "natural_stone", label: { de: "Naturstein", en: "Natural stone" }, color: "#9e968a", roughness: 0.85, metalness: 0, texture: "stone", scale: 2 },
+  // ——— v1.1: more materials (photo textures from Poly Haven, CC0) ———
+  { id: "stucco", label: { de: "Edelputz weiß", en: "White stucco" }, color: "#e9e5de", roughness: 0.9, metalness: 0, texture: "plaster", scale: 2 },
+  { id: "plaster_grey", label: { de: "Putz grau", en: "Grey plaster" }, color: "#a9a7a2", roughness: 0.9, metalness: 0, texture: "plaster", scale: 2 },
+  { id: "painted_concrete", label: { de: "Beton gestrichen", en: "Painted concrete" }, color: "#d9d7d2", roughness: 0.8, metalness: 0, texture: "concrete", scale: 2 },
+  { id: "concrete_smooth", label: { de: "Beton glatt", en: "Smooth concrete" }, color: "#bdbab4", roughness: 0.75, metalness: 0, texture: "concrete", scale: 3 },
+  { id: "concrete_floor", label: { de: "Betonboden geschliffen", en: "Polished concrete floor" }, color: "#a8a59f", roughness: 0.45, metalness: 0, texture: "concrete", scale: 3, clearcoat: 0.25 },
+  { id: "white_brick", label: { de: "Ziegel weiß", en: "White brick" }, color: "#e3ded6", roughness: 0.88, metalness: 0, texture: "brick", scale: 1.5 },
+  { id: "dark_brick", label: { de: "Klinker dunkel", en: "Dark brick" }, color: "#4a3a33", roughness: 0.85, metalness: 0, texture: "brick", scale: 1.5 },
+  { id: "marble_white", label: { de: "Marmor weiß", en: "White marble" }, color: "#ecebe8", roughness: 0.18, metalness: 0, texture: "stone", scale: 2, clearcoat: 0.6 },
+  { id: "marble_black", label: { de: "Marmor schwarz", en: "Black marble" }, color: "#2a2a2c", roughness: 0.15, metalness: 0, texture: "stone", scale: 2, clearcoat: 0.7 },
+  { id: "terrazzo", label: { de: "Terrazzo", en: "Terrazzo" }, color: "#d8d3cb", roughness: 0.3, metalness: 0, texture: "tiles", scale: 2, clearcoat: 0.4 },
+  { id: "slate_floor", label: { de: "Schieferboden", en: "Slate floor" }, color: "#4b4d50", roughness: 0.6, metalness: 0, texture: "tiles", scale: 2 },
+  { id: "granite_dark", label: { de: "Granit", en: "Granite" }, color: "#77736e", roughness: 0.35, metalness: 0, texture: "tiles", scale: 2, clearcoat: 0.3 },
+  { id: "white_tiles", label: { de: "Fliesen weiß", en: "White tiles" }, color: "#f2f1ee", roughness: 0.2, metalness: 0, texture: "tiles", scale: 1, clearcoat: 0.5 },
+  { id: "sandstone", label: { de: "Sandstein", en: "Sandstone" }, color: "#c9b28c", roughness: 0.9, metalness: 0, texture: "stone", scale: 3 },
+  { id: "herringbone", label: { de: "Fischgrätparkett", en: "Herringbone parquet" }, color: "#a87a4f", roughness: 0.5, metalness: 0, texture: "wood", scale: 1.5, clearcoat: 0.2 },
+  { id: "light_oak", label: { de: "Eiche hell", en: "Light oak" }, color: "#cfae84", roughness: 0.5, metalness: 0, texture: "wood", scale: 2 },
+  { id: "smoked_oak", label: { de: "Eiche geräuchert", en: "Smoked oak" }, color: "#6e5440", roughness: 0.5, metalness: 0, texture: "wood", scale: 2 },
+  { id: "walnut", label: { de: "Walnuss", en: "Walnut veneer" }, color: "#7a573b", roughness: 0.45, metalness: 0, texture: "wood", scale: 2, clearcoat: 0.2 },
+  { id: "larch_cladding", label: { de: "Lärchenschalung", en: "Larch cladding" }, color: "#a7835c", roughness: 0.8, metalness: 0, texture: "planks", scale: 2 },
+  { id: "corten", label: { de: "Cortenstahl", en: "Corten steel" }, color: "#8a4b2a", roughness: 0.75, metalness: 0.3, texture: "concrete", scale: 2 },
+  { id: "metal_sheet", label: { de: "Trapezblech", en: "Profiled metal sheet" }, color: "#9aa0a6", roughness: 0.4, metalness: 0.8, texture: "planks", scale: 1.5 },
+  { id: "gravel", label: { de: "Kies", en: "Gravel" }, color: "#9b958b", roughness: 0.95, metalness: 0, texture: "stone", scale: 1.5 },
+  { id: "aluminium", label: { de: "Aluminium gebürstet", en: "Brushed aluminium" }, color: "#c6cacd", roughness: 0.32, metalness: 1, texture: "none", scale: 1 },
+  { id: "copper", label: { de: "Kupfer", en: "Copper" }, color: "#b8733f", roughness: 0.35, metalness: 1, texture: "none", scale: 1 },
+  { id: "brass", label: { de: "Messing", en: "Brass" }, color: "#c9a24f", roughness: 0.3, metalness: 1, texture: "none", scale: 1 },
+  { id: "black_steel", label: { de: "Stahl schwarz", en: "Black steel" }, color: "#1e2023", roughness: 0.5, metalness: 0.8, texture: "none", scale: 1 },
+  { id: "glass_frosted", label: { de: "Milchglas", en: "Frosted glass" }, color: "#eef2f3", roughness: 0.45, metalness: 0, texture: "none", scale: 1, transmission: 0.8, ior: 1.5, opacity: 0.7 },
+  { id: "glass_tinted", label: { de: "Glas getönt", en: "Tinted glass" }, color: "#5f7377", roughness: 0.03, metalness: 0, texture: "none", scale: 1, transmission: 0.85, ior: 1.5, opacity: 0.5 },
+  { id: "paint_matte", label: { de: "Farbe matt (frei wählbar)", en: "Matte paint (any colour)" }, color: "#e8e4dd", roughness: 0.9, metalness: 0, texture: "none", scale: 1, paintable: true },
+  { id: "green_roof", label: { de: "Gründach", en: "Green roof" }, color: "#4f6b2c", roughness: 0.95, metalness: 0, texture: "grass", scale: 2 },
 ];
 
-export const PRESET = new Map(PRESETS.map((p) => [p.id, p]));
+const GROUPS: Record<string, MaterialGroup> = {
+  plaster_white: "wall", plaster_warm: "wall", stucco: "wall", plaster_grey: "wall", paint_matte: "wall", lacquer_white: "wall",
+  brick: "stone", white_brick: "stone", dark_brick: "stone", concrete: "stone", concrete_smooth: "stone", painted_concrete: "stone", natural_stone: "stone", sandstone: "stone", marble_white: "stone", marble_black: "stone",
+  oak: "floor", herringbone: "floor", terrazzo: "floor", slate_floor: "floor", granite_dark: "floor", white_tiles: "floor", stone_tiles: "floor", concrete_floor: "floor",
+  light_oak: "wood", smoked_oak: "wood", walnut: "wood", dark_wood: "wood", timber_cladding: "wood", larch_cladding: "wood",
+  roof_clay: "roof", roof_slate: "roof", green_roof: "roof", metal_sheet: "roof",
+  metal_anthracite: "metal", steel: "metal", aluminium: "metal", copper: "metal", brass: "metal", black_steel: "metal", corten: "metal",
+  glass: "glass", glass_frosted: "glass", glass_tinted: "glass",
+  grass: "outdoor", terrace_stone: "outdoor", gravel: "outdoor",
+};
+for (const p of PRESETS) p.group = GROUPS[p.id] ?? "wall";
+// plaster-like surfaces take a user colour as paint
+for (const id of ["plaster_white", "plaster_warm", "stucco", "plaster_grey", "lacquer_white", "painted_concrete"]) PRESETS.find((p) => p.id === id)!.paintable = true;
+
+const BASE = new Map(PRESETS.map((p) => [p.id, p]));
+
+/**
+ * Material ids may carry a user colour: "plaster_white~#a3b1c2". The derived preset keeps the
+ * base id in `tex` so the photo texture of the base material is used.
+ */
+export function resolvePreset(id: string): MaterialPreset | undefined {
+  const [baseId, colour] = id.split("~");
+  const base = BASE.get(baseId);
+  if (!base || !colour) return base;
+  return { ...base, id, color: colour, tex: baseId } as MaterialPreset;
+}
+export const withColour = (presetId: string, colour?: string) => (colour ? `${presetId.split("~")[0]}~${colour}` : presetId.split("~")[0]);
+export const baseId = (presetId: string) => presetId.split("~")[0];
+
+/** Map-like accessor kept for existing callers. */
+export const PRESET = { get: resolvePreset, has: (id: string) => !!resolvePreset(id) };
 
 export type Role = "all" | "top" | "under" | "side";
 

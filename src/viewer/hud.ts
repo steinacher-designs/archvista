@@ -41,8 +41,10 @@ export const HUD_CSS = `
 .av-b:hover{background:rgba(255,255,255,.12)}
 .av-b.on{background:var(--av-accent);color:#fff}
 .av-sep{width:1px;height:22px;background:rgba(255,255,255,.2);margin:0 2px}
-.av-levels{position:absolute;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column-reverse;gap:4px;padding:6px;border-radius:14px;background:rgba(18,18,20,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);pointer-events:auto}
+.av-levels{position:absolute;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;max-height:70%;overflow:auto;padding:6px;border-radius:14px;background:rgba(18,18,20,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);pointer-events:auto}
 .av-lv{text-align:left;font-size:13px}
+.av-hsep{height:1px;background:rgba(255,255,255,.2);margin:4px 6px}
+.av-place::before{content:"◉ ";color:var(--av-accent);font-size:10px}
 .av-hint{position:absolute;left:50%;top:14px;transform:translateX(-50%);font-size:12.5px;opacity:.85;text-shadow:0 1px 6px rgba(0,0,0,.6);text-align:center;width:90%}
 .av-locked .av-hint{opacity:0;transition:opacity 1s}
 .av-panel{position:absolute;right:16px;top:16px;width:min(360px,calc(100% - 32px));max-height:calc(100% - 120px);overflow:auto;padding:22px 22px 18px;border-radius:16px;
