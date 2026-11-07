@@ -23,7 +23,7 @@ Mit **„Alles automatisch“** auf dem Startbildschirm geht es direkt zum Verö
 ## 3. Anpassen (alles optional)
 - **Umgebung:** Stadt, Natur, Küste (echte Foto-Panoramen) oder Studio. Ein Klick.
 - **Licht:** Tag, Nachmittag oder Abendstimmung (mit Licht in den Räumen); Bildqualität automatisch oder Leistung / Ausgewogen / Ultra.
-- **Design:** sechs Website-Designs, Akzentfarbe, automatischer Rundgang.
+- **Design:** zehn Website-Designs (Minimal, Atelier, Noir, Kino, Swiss, Papier, Monografie, Studio, Plan, Beton), Akzentfarbe, automatischer Rundgang. Info-Text und Pläne sind optional – leer gelassen, zeigt die Website nur das Modell. Besucher mit VR-Brille (z. B. Meta Quest) sehen einen Knopf „VR-Brille“: linker Stick gehen, rechter Stick drehen.
 - **Texte:** Titel, Architekt:in / Büro, Beschreibung, Sprache, eigene Bilder. ARCHVISTA erfindet keine Texte.
 - **Bereiche:** *Gesperrt* (rot) = sichtbar, aber nicht betretbar. *Ausgeblendet* (grau) = wird aus den Website-Dateien wirklich entfernt. Raum anklicken, Bereich zeichnen, Tür sperren oder ganzes Geschoss.
 - **Infopunkte:** „Neuen Infopunkt setzen“, dann ins Modell klicken. Titel, Text, Material/Spezifikation, Bild.

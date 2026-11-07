@@ -124,9 +124,13 @@ button { cursor: pointer; }
 .pv.evening { background: linear-gradient(180deg, #4b4f7a, #e98d5f 70%, #f5c28b); }
 .pv .sun { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: #fff6d8; box-shadow: 0 0 20px #fff2c2; }
 .tile.tpl .pv { height: 96px; padding: 10px; display: grid; gap: 5px; }
-.tpl-minimal { background: #fff; } .tpl-dark-luxury { background: #0b0b0c; } .tpl-swiss { background: #f4f3ef; }
-.tpl-portfolio { background: #f6f4ff; } .tpl-nature { background: #f1ece2; } .tpl-cinema { background: #000; }
-.wf { border-radius: 3px; }
+.tpl-minimal { background: #fff; } .tpl-dark-luxury { background: #0c0c0d; } .tpl-swiss { background: #f3f2ee; }
+.tpl-portfolio { background: #faf9f7; } .tpl-nature { background: #efe9df; } .tpl-cinema { background: #000; }
+.tpl-monograph { background: #fbfbfa; } .tpl-studio { background: #151517; } .tpl-beton { background: #d6d4cf; }
+.tpl-blueprint { background: #0f2238 linear-gradient(rgba(150,190,240,.12) 1px, transparent 1px) 0 0/8px 8px; }
+.tile.tpl .pv.tpl-dark-luxury, .tile.tpl .pv.tpl-cinema { padding: 0; }
+.wfg { display: grid; gap: 5px; height: 76px; } .wfc { display: grid; gap: 4px; align-content: start; padding-top: 4px; }
+.wf { border-radius: 3px; display: block; }
 
 /* —— forms —— */
 .field { margin: 14px 0; } .field label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 6px; } .field small { display: block; color: var(--ink3); margin-top: 6px; font-size: 12.5px; }

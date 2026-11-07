@@ -4,7 +4,7 @@ export type Lang = "de" | "en";
 
 const S = {
   de: {
-    walk: "Begehen", orbit: "Umsehen", tour: "Rundgang", quality: "Qualität", fullscreen: "Vollbild", auto: "Automatisch",
+    walk: "Begehen", orbit: "Umsehen", tour: "Rundgang", quality: "Qualität", fullscreen: "Vollbild", auto: "Automatisch", vr: "VR-Brille",
     performance: "Leistung", balanced: "Ausgewogen", ultra: "Ultra",
     hintWalk: "Klicken zum Starten · W A S D gehen · Maus umsehen · Shift schneller · Esc beenden",
     hintTouch: "Linke Hälfte: gehen · Rechte Hälfte: umsehen",
@@ -12,7 +12,7 @@ const S = {
     loading: "Modell wird geladen", webgl: "Dieser Browser kann keine 3D-Grafik (WebGL2) anzeigen.",
   },
   en: {
-    walk: "Walk", orbit: "Look around", tour: "Tour", quality: "Quality", fullscreen: "Full screen", auto: "Auto",
+    walk: "Walk", orbit: "Look around", tour: "Tour", quality: "Quality", fullscreen: "Full screen", auto: "Auto", vr: "VR headset",
     performance: "Performance", balanced: "Balanced", ultra: "Ultra",
     hintWalk: "Click to start · W A S D to walk · mouse to look · Shift to run · Esc to stop",
     hintTouch: "Left half: walk · Right half: look",
@@ -58,5 +58,5 @@ export const HUD_CSS = `
 .av-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#fff;font:15px system-ui,sans-serif;background:#111;z-index:5;transition:opacity .6s}
 .av-loading .av-track{width:220px;height:3px;background:rgba(255,255,255,.2);border-radius:2px;overflow:hidden}
 .av-loading .av-fill{height:100%;width:0;background:var(--av-accent);transition:width .2s}
-@media (max-width:640px){.av-b{padding:7px 9px;font-size:13px}.av-bar{bottom:10px}.av-levels{top:auto;bottom:70px;transform:none;left:10px}}
+@media (max-width:640px){.av-b{padding:7px 8px;font-size:12.5px}.av-bar{gap:2px;max-width:calc(100% - 16px)}.av-q,.av-sep{display:none!important}.av-bar{bottom:10px}.av-levels{top:auto;bottom:70px;transform:none;left:10px}}
 `;

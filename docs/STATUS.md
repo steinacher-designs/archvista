@@ -15,7 +15,8 @@
 | Begehen (WASD, Maus, Shift, Esc, Schwerkraft, Treppen, Kollision, Touch) | ✅ / 🟡 | Physik getestet; Touch nicht auf echtem Gerät geprüft |
 | Gesperrte / ausgeblendete Bereiche | ✅ | Ausgeblendetes wird geometrisch entfernt (Test prüft GLB) |
 | Infopunkte, Blickpunkte, Rundgang | ✅ | |
-| 6 Website-Designs, relative Pfade, Galerie | ✅ | |
+| 10 Website-Designs, Modell im Mittelpunkt, Info/Pläne optional, keine Standbilder | ✅ | |
+| VR-Brillen (WebXR): gehen mit Stick, 30°-Drehung, Kollision | ✅ | mit WebXR-Emulator (iwer, Quest 3) getestet, nicht an echter Brille |
 | GitHub-Veröffentlichung (Geräte-Anmeldung, inkrementell, Pages, Live-Prüfung) | ✅ simuliert · 🟡 echt | OAuth-App „ARCHVISTA“ (Device Flow) registriert; echte Testseite https://steinacher-designs.github.io/archvista-test/ nach 30 s online, alle Dateien korrekt unter Unterpfad, Desktop + Handy ohne Fehler. Der Veröffentlichen-Knopf selbst wird im Abschlusstest auf Windows geprüft. |
 | Offline-Export | ✅ | |
 | Windows-Installer (NSIS .exe + MSI) | ✅ gebaut | GitHub Actions (windows-latest): ARCHVISTA_1.0.0_x64-setup.exe (50 MB), MSI de-DE / en-US |

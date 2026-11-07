@@ -1,6 +1,6 @@
 {
   "name": "archvista",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "ARCHVISTA – 3D-DXF zu interaktiver Architektur-Website",
   "main": "index.js",
   "scripts": {

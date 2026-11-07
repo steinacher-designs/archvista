@@ -77,13 +77,20 @@ function Light() {
   );
 }
 
+// schematic thumbnails of the ten website layouts (the 3D model is the sky-coloured block)
+const M = "linear-gradient(180deg,#9db6cc 0 55%,#a9b59a 55%)";
+const box = (st: React.CSSProperties) => <i className="wf" style={st} />;
 const WF: Record<TemplateId, React.ReactNode> = {
-  minimal: <><i className="wf" style={{ background: "#151515", height: 10, width: "60%" }} /><i className="wf" style={{ background: "#ddd", height: 4, width: "80%" }} /><i className="wf" style={{ background: "#c9d4dd", height: 40 }} /></>,
-  "dark-luxury": <><i className="wf" style={{ background: "#3a362f", height: 46 }} /><i className="wf" style={{ background: "#c9a96e", height: 8, width: "50%" }} /><i className="wf" style={{ background: "#2a2722", height: 4, width: "70%" }} /></>,
-  swiss: <><i className="wf" style={{ background: "#000", height: 22, width: "90%" }} /><i className="wf" style={{ background: "#e3000f", height: 6, width: "25%" }} /><i className="wf" style={{ background: "#bbb", height: 28 }} /></>,
-  portfolio: <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, height: "100%" }}><i className="wf" style={{ background: "#5b4cff", borderRadius: 8 }} /><i className="wf" style={{ background: "#c8c3e8", borderRadius: 8 }} /></div>,
-  nature: <><i className="wf" style={{ background: "#6d7f4f", height: 6, width: "30%", justifySelf: "center" }} /><i className="wf" style={{ background: "#b9ad93", height: 56, width: 50, justifySelf: "center", borderRadius: "30px 30px 4px 4px" }} /></>,
-  cinema: <><i className="wf" style={{ background: "#222", height: 70 }} /><i className="wf" style={{ background: "#ff5a36", height: 6, width: "30%" }} /></>,
+  minimal: <>{box({ background: "#151515", height: 4, width: "35%" })}{box({ background: M, height: 52, borderRadius: 3 })}{box({ background: "#151515", height: 6, width: "45%" })}</>,
+  portfolio: <div className="wfg" style={{ gridTemplateColumns: "34% 1fr" }}><div className="wfc">{box({ background: "#b8673b", height: 3, width: "40%" })}{box({ background: "#1d1c1a", height: 7, width: "85%" })}{box({ background: "#cfc8bd", height: 3 })}{box({ background: "#cfc8bd", height: 3, width: "70%" })}</div>{box({ background: M, height: "100%" })}</div>,
+  "dark-luxury": <div style={{ position: "relative", height: "100%", background: M, borderRadius: 3 }}><i style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,rgba(12,12,13,.85),transparent 60%)" }} /><i className="wf" style={{ position: "absolute", left: 7, top: 8, background: "#c9a96e", height: 2, width: 18 }} /><i className="wf" style={{ position: "absolute", left: 7, top: 14, background: "#ece7dd", height: 7, width: "55%" }} /></div>,
+  cinema: <div style={{ position: "relative", height: "100%", background: M, borderRadius: 3 }}><i className="wf" style={{ position: "absolute", left: 7, top: 7, background: "#fff", height: 4, width: "30%" }} /><i className="wf" style={{ position: "absolute", right: 6, top: 5, background: "#ff5a36", height: 8, width: 18, borderRadius: 6 }} /></div>,
+  swiss: <><div style={{ display: "flex", gap: 4, alignItems: "center" }}>{box({ background: "#e3000f", height: 6, width: 6 })}{box({ background: "#111", height: 2, flex: 1 })}</div>{box({ background: "#111", height: 15, width: "80%" })}{box({ background: M, height: 40 })}</>,
+  nature: <>{box({ background: "#6d7f4f", height: 2, width: "20%", justifySelf: "center" })}{box({ background: "#2b2822", height: 6, width: "45%", justifySelf: "center" })}<div style={{ background: "#f8f4ec", padding: 3, borderRadius: 7 }}>{box({ background: M, height: 44, borderRadius: 5 })}</div></>,
+  monograph: <>{box({ background: "#222", height: 6, width: "42%", justifySelf: "center", borderRadius: 1 })}{box({ background: "#bbb", height: 2, width: "22%", justifySelf: "center" })}<div style={{ background: "#e6e4df", padding: 5 }}>{box({ background: M, height: 42 })}</div></>,
+  studio: <div className="wfg" style={{ gridTemplateColumns: "1fr 32%" }}>{box({ background: M, height: "100%" })}<div className="wfc" style={{ background: "#1b1b1e", padding: 4 }}>{box({ background: "#4f8cff", height: 2, width: "40%" })}{box({ background: "#fff", height: 6 })}{box({ background: "#444", height: 3 })}{box({ background: "#444", height: 3, width: "70%" })}</div></div>,
+  blueprint: <div style={{ border: "1px solid rgba(200,220,245,.6)", height: "100%", display: "grid", gridTemplateRows: "1fr 22px" }}>{box({ background: M, borderRadius: 0, borderBottom: "1px solid rgba(200,220,245,.6)" })}<div style={{ display: "grid", gridTemplateColumns: "1fr 40%" }}><i />{box({ borderLeft: "1px solid rgba(200,220,245,.6)", borderRadius: 0, background: "linear-gradient(#fff,#fff) 4px 6px/60% 3px no-repeat" })}</div></div>,
+  beton: <>{box({ background: "#161616", height: 3 })}{box({ background: "#161616", height: 16, width: "92%", borderRadius: 0 })}{box({ background: M, height: 42, borderRadius: 0, outline: "2px solid #161616" })}</>,
 };
 
 function Design() {
@@ -117,11 +124,6 @@ function Design() {
 function Texts() {
   const { t, project, update, model, reprocess, lang } = useStore();
   const p = project!;
-  const addImages = async (files: FileList | null) => {
-    if (!files) return;
-    const list = await Promise.all([...files].slice(0, 1).map((f) => new Promise<{ name: string; dataUrl: string }>((res) => { const r = new FileReader(); r.onload = () => res({ name: f.name, dataUrl: r.result as string }); r.readAsDataURL(f); })));
-    update((pp) => { pp.images = list.map((x) => ({ ...x, caption: x.name.replace(/\.[^.]+$/, "") })); });
-  };
   const u = model!.units;
   return (
     <>
@@ -129,18 +131,6 @@ function Texts() {
       <div className="field"><label htmlFor="au">{t.author}</label><input id="au" className="input" value={p.author} onChange={(e) => update((pp) => { pp.author = e.target.value; }, { coalesce: "author" })} /></div>
       <div className="field"><label htmlFor="de">{t.description}</label><textarea id="de" className="textarea" value={p.description} onChange={(e) => update((pp) => { pp.description = e.target.value; }, { coalesce: "desc" })} /><small>{t.descriptionHint}</small></div>
       <div className="field"><label>{t.language}</label><div className="chips"><button className={p.language === "de" ? "on" : ""} onClick={() => update((pp) => { pp.language = "de"; })}>Deutsch</button><button className={p.language === "en" ? "on" : ""} onClick={() => update((pp) => { pp.language = "en"; })}>English</button></div></div>
-      <div className="field">
-        <label>{t.images}</label>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
-          {p.images.map((im, i) => (
-            <div key={i} style={{ position: "relative" }}>
-              <img src={im.dataUrl} alt={im.caption} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10 }} />
-              <button className="iconbtn" style={{ position: "absolute", top: 4, right: 4, height: 24, minWidth: 24, padding: 0 }} onClick={() => update((pp) => { pp.images.splice(i, 1); })} aria-label={t.delete}>×</button>
-            </div>
-          ))}
-        </div>
-        <label className="btn ghost small" style={{ marginTop: 8 }}>{t.addImages}<input type="file" accept="image/*" hidden onChange={(e) => addImages(e.target.files)} /></label>
-      </div>
       <div className="field">
         <label>{t.unitsTitle}</label>
         {u.source === "guess" && <div className="note warn">{model!.warnings.find((w) => w.code === "units-guessed")?.message}</div>}

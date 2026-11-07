@@ -2,7 +2,7 @@
 
 **Aus einer 3D-DXF aus AutoCAD wird in wenigen Minuten eine fotorealistische, begehbare Website.**
 
-ARCHVISTA ist eine kostenlose Windows-Anwendung. Sie liest 3D-DXF-Dateien direkt, erkennt Geschosse, Räume und den Eingang, setzt das Gebäude in eine fotografische Umgebung (Stadt, Natur, Küste oder Studio), erzeugt eine Website mit einem von sechs Designs und veröffentlicht sie per Knopfdruck über GitHub Pages.
+ARCHVISTA ist eine kostenlose Windows-Anwendung. Sie liest 3D-DXF-Dateien direkt, erkennt Geschosse, Räume und den Eingang, setzt das Gebäude in eine fotografische Umgebung (Stadt, Natur, Küste oder Studio), erzeugt eine Website mit einem von zehn Designs (auf Wunsch auch mit VR-Brille begehbar) und veröffentlicht sie per Knopfdruck über GitHub Pages.
 
 1. **Importieren** – DXF-Datei hineinziehen
 2. **Erstellen** – alles Weitere passiert automatisch

@@ -16,8 +16,6 @@ export interface SiteInput {
   runtime: Uint8Array;
   /** Reads files from the bundled asset library (paths relative to assets-lib/). */
   readAsset: AssetReader;
-  /** Rendered stills (jpeg) keyed by viewpoint id, captured by the app. */
-  renders?: { id: string; caption: string; data: Uint8Array }[];
   /** Downloads (plans, details …) with their bytes. */
   documents?: { doc: ProjectDocument; data: Uint8Array }[];
 }
@@ -92,12 +90,6 @@ export function siteData(input: SiteInput): SiteData {
   if (area > 0) facts.push({ label: L === "de" ? "Raumfläche ca." : "Room area approx.", value: `${fmt(Math.round(area))} m²` });
   facts.push({ label: L === "de" ? "Abmessungen" : "Dimensions", value: `${fmt(size[0])} × ${fmt(size[1])} m` });
   facts.push({ label: L === "de" ? "Höhe" : "Height", value: `${fmt(size[2])} m` });
-  const renders = input.renders ?? [];
-  // title image: the user's own first image if there is one, otherwise the rendered main view
-  const gallery = [
-    ...p.images.slice(0, 1).map((im) => ({ src: `images/user-1${extOf(im.dataUrl)}`, caption: im.caption ?? "" })),
-    ...renders.slice(0, 1).map((r) => ({ src: `images/${r.id}.jpg`, caption: r.caption })),
-  ];
   return {
     lang: L,
     title: p.title || "Projekt",
@@ -106,9 +98,6 @@ export function siteData(input: SiteInput): SiteData {
     accent: p.accent,
     year: new Date(p.updatedAt).getFullYear(),
     facts,
-    highlights: pub.config.hotspots.map((h, i) => ({ n: i + 1, title: h.title, text: h.text, image: h.image, facts: [...(h.facts ?? []), ...(h.materialSpec ? [h.materialSpec] : [])] })),
-    gallery: [],
-    hero: gallery[0]?.src ?? null,
     levels: pub.config.levels.map((l) => (L === "de" ? l.name.de : l.name.en)),
     hasTour: pub.config.tour && pub.config.viewpoints.length > 1,
     documents: groupDocuments(input),
@@ -181,10 +170,8 @@ export async function generateSite(input: SiteInput): Promise<FileMap> {
     const inSite = [...files.keys()].some((f) => f.includes(`/${kk}.`) || f.includes(`/${kk}_`));
     if (inSite) used[k] = v;
   }
-  // images
-  if (!p.images.length) for (const r of (input.renders ?? []).slice(0, 1)) files.set(`images/${r.id}.jpg`, r.data);
+  // images of info points (shown inside the 3D view); the pages themselves carry no rendered stills
   for (const [k, v] of hsImages) files.set(k, v);
-  p.images.slice(0, 1).forEach((im) => { const b = dataUrlBytes(im.dataUrl); if (b) files.set(`images/user-1${extOf(im.dataUrl)}`, b); });
   // downloads (plans, details …) — real files, same structure as the user's folders
   const paths = documentPaths((p.documents ?? []).filter((d) => input.documents?.some((x) => x.doc.id === d.id)));
   for (const { doc, data } of input.documents ?? []) { const path = paths.get(doc.id); if (path) files.set(path, data); }

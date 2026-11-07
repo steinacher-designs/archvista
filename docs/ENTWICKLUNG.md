@@ -9,7 +9,7 @@ src/core/            reine Logik (läuft im Browser, im Web-Worker und in Node-T
   scene.ts           automatische Aufbereitung, Blickpunkte, Infopunkt-Vorschläge
   zones.ts           Bereiche (frei / gesperrt / ausgeblendet), exaktes Ausschneiden
   export/            öffentliche Szene (GLB + JSON), GLB-Schreiber
-  site/              Website-Generator, sechs Designs
+  site/              Website-Generator, zehn Designs
   publish/           GitHub: Geräte-Anmeldung, inkrementeller Upload, Pages, Live-Prüfung
 src/viewer/          3D-Viewer (App + jede Website): Licht, Umgebungen, Begehen, Hotspots, Rundgang
 src/app/             Desktop-Oberfläche (React)

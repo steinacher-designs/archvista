@@ -20,7 +20,7 @@ import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
 import { buildCollider, Walker, DEFAULT_WALKER } from "./physics";
 import { buildEnvironment, disposeGroup, EnvResult, type Lighting } from "./environments";
 import { AssetLibrary } from "./assets";
-import { PointLight, CircleGeometry, CanvasTexture, ShadowMaterial } from "three";
+import { PointLight, CircleGeometry, CanvasTexture, ShadowMaterial, Quaternion } from "three";
 import { GroundedSkybox } from "three/examples/jsm/objects/GroundedSkybox.js";
 import { makeMaps } from "./textures";
 import type { PublicConfig } from "../core/export/public-scene";
@@ -45,6 +45,8 @@ export interface ViewerOptions {
   preserveDrawingBuffer?: boolean;
   /** Base URL of the bundled asset library (HDRIs, photo textures, plant models). */
   assetBase?: string | null;
+  /** Offer "VR headset" (WebXR) when the browser supports immersive VR (published websites). */
+  vr?: boolean;
 }
 
 export interface BuildingPart { presetId: string; positions: Float32Array; normals: Float32Array; uvs: Float32Array; indices: Uint32Array | Uint16Array }
@@ -813,7 +815,7 @@ export class ArchViewer {
   private loop = () => {
     if (this.disposed) return;
     this.raf = requestAnimationFrame(this.loop);
-    if (this.paused) return;
+    if (this.paused || this.xrRig) return;
     if (this.maxFps > 0) { const now = performance.now(); if (now - this.lastFrame < 1000 / this.maxFps) return; this.lastFrame = now; }
     this.clock.update();
     const dt = Math.min(this.clock.getDelta(), 0.1);
@@ -972,6 +974,7 @@ export class ArchViewer {
         <span class="av-sep"></span>
         <button data-a="quality" class="av-b av-q" title="${L("quality")}"></button>
         <button data-a="fs" class="av-b" title="${L("fullscreen")}" aria-label="${L("fullscreen")}">⤢</button>
+        <button data-a="vr" class="av-b av-vr" hidden>${L("vr")}</button>
       </div>
       ${this.jumpList(levels)}
       <div class="av-hint"></div>
@@ -989,6 +992,7 @@ export class ArchViewer {
       else if (a === "quality") {
         const order: Quality[] = ["auto", "performance", "balanced", "ultra"];
         this.setQuality(order[(order.indexOf(this.quality) + 1) % order.length]);
+      } else if (a === "vr") { void this.enterVR();
       } else if (a === "fs") {
         const root = this.container.closest("[data-av-fullscreen]") ?? this.container;
         if (document.fullscreenElement) document.exitFullscreen(); else (root as HTMLElement).requestFullscreen?.();
@@ -997,6 +1001,105 @@ export class ArchViewer {
     this.container.appendChild(hud);
     this.hudEl = hud;
     this.updateHudState();
+    if (this.opts.vr) void this.vrSupported().then((ok) => { const b = hud.querySelector<HTMLElement>("[data-a=vr]"); if (b) b.hidden = !ok; });
+  }
+
+  // ——— VR headsets (WebXR) ———
+  private xrRig: Group | null = null;
+  private xrSnapReady = true;
+  private xrSaved: { pos: Vector3; quat: Quaternion; mode: "orbit" | "walk" } | null = null;
+
+  /** True when a VR headset can be used in this browser (e.g. Meta Quest browser, Chrome/Edge with SteamVR/WMR). */
+  async vrSupported(): Promise<boolean> {
+    const xr = (navigator as Navigator & { xr?: { isSessionSupported(m: string): Promise<boolean> } }).xr;
+    try { return !!xr && (await xr.isSessionSupported("immersive-vr")); } catch { return false; }
+  }
+
+  get inVR() { return !!this.xrRig; }
+
+  /** Step into the building with a VR headset: standing at the entrance (or where you are walking), left stick walks, right stick turns. */
+  async enterVR(): Promise<boolean> {
+    const xr = (navigator as Navigator & { xr?: { requestSession(m: string, o: unknown): Promise<XRSession> } }).xr;
+    if (!xr || !this.config || !this.walker || this.xrRig) return false;
+    let session: XRSession;
+    try { session = await xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] }); } catch { return false; }
+    this.stopTour();
+    this.xrSaved = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone(), mode: this.mode === "walk" ? "walk" : "orbit" };
+    if (this.mode !== "walk") this.walker.teleport(this.config.start.position, this.config.start.yaw);
+    const rig = new Group();
+    rig.name = "vr-rig";
+    this.scene.add(rig);
+    rig.add(this.camera);
+    this.camera.position.set(0, 0, 0); this.camera.quaternion.identity();
+    this.xrRig = rig;
+    this.placeRig();
+    rig.rotation.y = this.walker.yaw;
+    const r = this.renderer;
+    r.xr.enabled = true;
+    r.xr.setReferenceSpaceType("local-floor");
+    r.shadowMap.autoUpdate = true;
+    if (this.hudEl) this.hudEl.style.display = "none";
+    session.addEventListener("end", () => this.exitVRCleanup());
+    try { await r.xr.setSession(session as never); } catch { this.exitVRCleanup(); return false; }
+    let last = performance.now();
+    r.setAnimationLoop((now) => {
+      const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+      this.xrFrame(dt, session);
+    });
+    return true;
+  }
+
+  exitVR() { void this.renderer.xr.getSession()?.end(); }
+
+  private placeRig() {
+    const w = this.walker!, rig = this.xrRig!;
+    const feetY = w.eye().y - w.opt.eye; // smoothed floor height (stairs)
+    rig.position.set(w.feet.x, feetY, w.feet.z);
+  }
+
+  private xrFrame(dt: number, session: XRSession) {
+    const w = this.walker, rig = this.xrRig;
+    if (!w || !rig) return;
+    this.envRes?.update?.(this.clock.getElapsed());
+    // controllers: left stick = walk in viewing direction, right stick = 30° snap turn
+    let mx = 0, mz = 0, turn = 0;
+    for (const src of session.inputSources) {
+      const gp = src.gamepad;
+      if (!gp || gp.axes.length < 2) continue;
+      const ax = gp.axes.length >= 4 ? gp.axes[2] : gp.axes[0], ay = gp.axes.length >= 4 ? gp.axes[3] : gp.axes[1];
+      if (src.handedness === "right") turn = ax;
+      else { mx = ax; mz = -ay; }
+    }
+    if (Math.abs(turn) < 0.6) this.xrSnapReady = true;
+    else if (this.xrSnapReady) { rig.rotation.y -= Math.sign(turn) * Math.PI / 6; this.xrSnapReady = false; }
+    if (Math.abs(mx) < 0.15) mx = 0;
+    if (Math.abs(mz) < 0.15) mz = 0;
+    // walking direction follows the head
+    const head = this.renderer.xr.getCamera();
+    const fwd = new Vector3(0, 0, -1).applyQuaternion(head.getWorldQuaternion(new Quaternion()));
+    w.yaw = Math.atan2(-fwd.x, -fwd.z);
+    w.update(dt, { x: mx, z: mz });
+    this.placeRig();
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  private exitVRCleanup() {
+    const rig = this.xrRig;
+    if (!rig) return;
+    const r = this.renderer;
+    r.setAnimationLoop(null);
+    r.xr.enabled = false;
+    rig.remove(this.camera);
+    this.scene.remove(rig);
+    this.xrRig = null;
+    const saved = this.xrSaved;
+    this.camera.position.copy(saved?.pos ?? this.camera.position);
+    if (saved) this.camera.quaternion.copy(saved.quat);
+    if (this.walker) this.walker.yaw = rig.rotation.y;
+    if (this.hudEl) this.hudEl.style.display = "";
+    this.resize();
+    if (saved?.mode === "walk") this.setMode("walk");
+    this.invalidate(8);
   }
 
   /** Storeys (top floor first) followed by the user's own places. */

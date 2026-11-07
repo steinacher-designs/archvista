@@ -22,7 +22,7 @@ async function site(mut: (p: ReturnType<typeof newProject>) => void = () => {}) 
 const html = (f: Map<string, Uint8Array>) => new TextDecoder().decode(f.get("index.html")!);
 
 describe("website generator", () => {
-  it("renders all six templates, each visibly different and complete", async () => {
+  it("renders all ten templates, each visibly different and complete", async () => {
     const pages: string[] = [];
     for (const t of TEMPLATES) {
       const { files } = await site((p) => { p.template = t.id; p.title = "Haus am See"; p.description = "Ein Wohnhaus.\n\nZweiter Absatz."; p.author = "Studio Muster"; });
@@ -36,7 +36,8 @@ describe("website generator", () => {
     }
     // the <style> blocks must all differ (genuinely different designs, not recoloured copies)
     const styles = pages.map((p) => p.match(/<style>([\s\S]*?)<\/style>/)![1]);
-    expect(new Set(styles).size).toBe(6);
+    expect(new Set(styles).size).toBe(10);
+    expect(TEMPLATES.length).toBe(10);
   });
 
   it("uses only relative URLs, so GitHub Pages sub paths and offline folders work", async () => {
@@ -47,17 +48,18 @@ describe("website generator", () => {
     }
   });
 
-  it("has no highlights or gallery section; only one title image is shipped", async () => {
-    const renders = ["a", "b", "c"].map((id) => ({ id, caption: id, data: new Uint8Array([1, 2, 3]) }));
+  it("ships no rendered stills; info text and plans appear only when filled in", async () => {
     for (const t of TEMPLATES) {
       const project = newProject("house_mm.dxf", "abc");
       project.template = t.id; project.hotspots = scene.hotspotSuggestions; project.viewpoints = scene.viewpoints;
       const pub = buildPublicScene(scene, project);
-      const files = await generateSite({ project, scene, pub, runtime, readAsset, renders });
+      const files = await generateSite({ project, scene, pub, runtime, readAsset });
       const h = html(files);
-      expect(h).not.toMatch(/Highlights|Galerie|id="galerie"|class="hls"|class="gal"/);
-      expect([...files.keys()].filter((k) => k.startsWith("images/"))).toEqual(["images/a.jpg"]);
-      if (t.id !== "cinema" && t.id !== "swiss") expect(h).toContain('src="images/a.jpg"');
+      expect(h).not.toMatch(/Highlights|Galerie|<img/);
+      expect([...files.keys()].filter((k) => k.startsWith("images/"))).toEqual([]);
+      expect(h, t.id).not.toContain('id="plaene"');
+      expect(h, t.id).not.toContain('class="txt"><p');
+      expect(h).toContain("data-archvista");
     }
   });
 

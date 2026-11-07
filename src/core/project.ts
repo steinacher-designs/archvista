@@ -3,7 +3,7 @@
 import type { Zone } from "./zones";
 
 export type EnvironmentId = "urban" | "forest" | "coastal" | "studio";
-export type TemplateId = "minimal" | "dark-luxury" | "swiss" | "portfolio" | "nature" | "cinema";
+export type TemplateId = "minimal" | "dark-luxury" | "swiss" | "portfolio" | "nature" | "cinema" | "monograph" | "blueprint" | "studio" | "beton";
 export type Quality = "auto" | "performance" | "balanced" | "ultra";
 export type Lighting = "day" | "afternoon" | "evening";
 
@@ -101,12 +101,16 @@ export const ENVIRONMENTS: { id: EnvironmentId; de: string; en: string }[] = [
 ];
 
 export const TEMPLATES: { id: TemplateId; de: string; en: string; accent: string }[] = [
-  { id: "minimal", de: "Minimal Architektur", en: "Minimal Architecture", accent: "#1f1f1f" },
-  { id: "dark-luxury", de: "Dark Luxury", en: "Dark Luxury", accent: "#c9a96e" },
-  { id: "swiss", de: "Swiss Editorial", en: "Swiss Editorial", accent: "#e3000f" },
-  { id: "portfolio", de: "Kreatives Portfolio", en: "Creative Portfolio", accent: "#5b4cff" },
-  { id: "nature", de: "Natur & Material", en: "Nature & Material", accent: "#6d7f4f" },
-  { id: "cinema", de: "Immersives Kino", en: "Immersive Cinema", accent: "#ff5a36" },
+  { id: "minimal", de: "Minimal", en: "Minimal", accent: "#1f1f1f" },
+  { id: "portfolio", de: "Atelier", en: "Atelier", accent: "#b8673b" },
+  { id: "dark-luxury", de: "Noir", en: "Noir", accent: "#c9a96e" },
+  { id: "cinema", de: "Kino", en: "Cinema", accent: "#ff5a36" },
+  { id: "swiss", de: "Swiss", en: "Swiss", accent: "#e3000f" },
+  { id: "nature", de: "Papier", en: "Paper", accent: "#6d7f4f" },
+  { id: "monograph", de: "Monografie", en: "Monograph", accent: "#8a6d4b" },
+  { id: "studio", de: "Studio", en: "Studio", accent: "#4f8cff" },
+  { id: "blueprint", de: "Plan", en: "Blueprint", accent: "#7fd1ff" },
+  { id: "beton", de: "Beton", en: "Concrete", accent: "#e8501c" },
 ];
 
 export function titleFromFile(name: string) {

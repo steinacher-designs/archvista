@@ -1,5 +1,6 @@
-// ARCHVISTA — six website designs. Rule-based, local, no AI service. All paths are relative
-// so the site works from a file folder, any web server and any GitHub Pages sub path.
+// ARCHVISTA — ten website designs. The live 3D model is always the centre of the page; info text and
+// plans appear only when the user filled them in. No rendered stills, no web fonts (works offline,
+// no third-party requests), all paths relative (works from a folder, any server, GitHub Pages sub paths).
 
 import type { TemplateId } from "../project";
 
@@ -11,9 +12,6 @@ export interface SiteData {
   accent: string;
   year: number;
   facts: { label: string; value: string }[];
-  highlights: { n: number; title: string; text: string; facts: string[]; image?: string }[];
-  gallery: { src: string; caption: string }[];
-  hero: string | null; // image path
   levels: string[];
   hasTour: boolean;
   /** Downloads grouped by folder. */
@@ -22,20 +20,26 @@ export interface SiteData {
 }
 
 const T = {
-  de: { experience: "Erleben", project: "Projekt", gallery: "Galerie", highlights: "Highlights", walk: "Begehen", tour: "Rundgang starten",
-    explore: "Gebäude in 3D erkunden", about: "Über das Projekt", by: "Entwurf", made: "Erstellt mit ARCHVISTA", credits: "Bildnachweise & Lizenzen",
-    noDesc: "", scroll: "Scrollen", enter: "Eintreten", facts: "Kennzahlen", measured: "aus dem 3D-Modell gemessen", fullscreen: "Vollbild", docs: "Pläne & Unterlagen", docsAll: "Alle Dateien" },
-  en: { experience: "Experience", project: "Project", gallery: "Gallery", highlights: "Highlights", walk: "Walk through", tour: "Start tour",
-    explore: "Explore the building in 3D", about: "About the project", by: "Design", made: "Made with ARCHVISTA", credits: "Credits & licences",
-    noDesc: "", scroll: "Scroll", enter: "Enter", facts: "Key figures", measured: "measured from the 3D model", fullscreen: "Full screen", docs: "Plans & documents", docsAll: "All files" },
+  de: { model: "3D-Modell", project: "Projekt", info: "Info", by: "Entwurf", made: "Erstellt mit ARCHVISTA", credits: "Bildnachweise",
+    measured: "aus dem 3D-Modell gemessen", docs: "Pläne & Unterlagen", close: "Schließen", drawing: "Zeichnung", date: "Datum", sheet: "Blatt",
+    hint: "Ziehen zum Umsehen · „Begehen“ für einen Rundgang zu Fuß" },
+  en: { model: "3D model", project: "Project", info: "Info", by: "Design", made: "Made with ARCHVISTA", credits: "Credits",
+    measured: "measured from the 3D model", docs: "Plans & documents", close: "Close", drawing: "Drawing", date: "Date", sheet: "Sheet",
+    hint: "Drag to look around · “Walk” to explore on foot" },
 };
+type Tx = (typeof T)["de"];
 
 export function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 const paras = (s: string) => s.split(/\n{2,}/).filter((p) => p.trim()).map((p) => `<p>${esc(p.trim()).replace(/\n/g, "<br>")}</p>`).join("");
 
-function head(d: SiteData, css: string, extra = "") {
+const SANS = `"Helvetica Neue","Segoe UI Variable Text","Segoe UI",Helvetica,Arial,system-ui,-apple-system,sans-serif`;
+const DISPLAY = `"Helvetica Neue","Segoe UI Variable Display","Segoe UI",Helvetica,Arial,system-ui,sans-serif`;
+const SERIF = `"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif`;
+const MONO = `ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,monospace`;
+
+function head(d: SiteData, css: string, theme: string) {
   return `<!doctype html>
 <html lang="${d.lang}">
 <head>
@@ -44,265 +48,337 @@ function head(d: SiteData, css: string, extra = "") {
 <title>${esc(d.title)}</title>
 <meta name="description" content="${esc(d.description.slice(0, 160) || d.title)}">
 <meta property="og:title" content="${esc(d.title)}">
-${d.hero ? `<meta property="og:image" content="${esc(d.hero)}">` : ""}
+<meta name="theme-color" content="${theme}">
 <meta name="generator" content="ARCHVISTA">
 ${d.buildId ? `<meta name="archvista-build" content="${esc(d.buildId)}">` : ""}
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="modulepreload" href="assets/viewer.js">
 <style>${BASE_CSS}${css}</style>
-${extra}
 </head>`;
 }
 
 const BASE_CSS = `
-*,*::before,*::after{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}body{margin:0;--accent:ACCENT}
-img{max-width:100%;display:block}a{color:inherit}
-.viewer{position:relative;width:100%;height:min(82vh,860px);min-height:420px;border-radius:var(--radius,0);overflow:hidden;background:#111}
+*,*::before,*::after{box-sizing:border-box}html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}body{margin:0;--accent:ACCENT;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:inherit}p{margin:0 0 1em}p:last-child{margin-bottom:0}
+.viewer{position:relative;width:100%;overflow:hidden;background:#15161a}
 .viewer [data-archvista]{position:absolute;inset:0}
-.gal{display:grid;gap:var(--gap,16px)}
-.gal figure{margin:0}.gal figcaption{font-size:.85em;opacity:.7;margin-top:.5em}
-.hl-n{display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex:none}
-.facts small{display:block;opacity:.6}
-.docs{display:grid;gap:28px}.docs h3{margin:0 0 10px}.docs ul{list-style:none;margin:0;padding:0}
-.docs a{display:flex;align-items:center;gap:14px;padding:13px 4px;text-decoration:none;border-bottom:1px solid var(--docline,rgba(0,0,0,.12))}
-.docs .ext{flex:none;min-width:46px;text-align:center;font:600 11px/1 system-ui,sans-serif;letter-spacing:.06em;padding:6px 7px;border-radius:5px;background:var(--accent);color:#fff}
-.docs .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.docs .sz{opacity:.55;font-size:.85em;white-space:nowrap}.docs .dl{opacity:.6;transition:transform .2s}.docs a:hover .dl{transform:translateY(2px);opacity:1}
-.skip{position:absolute;left:-999px}.skip:focus{left:8px;top:8px;z-index:9;background:#fff;color:#000;padding:8px}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+.facts{display:flex;flex-wrap:wrap;gap:var(--fgap,28px 40px);margin:0;padding:0}.facts div{min-width:0}.facts dt{opacity:.55;font-size:.78em;letter-spacing:.04em}.facts dd{margin:3px 0 0}
+.docs{display:grid;gap:28px}.docs h3{margin:0 0 6px;font:inherit}.docs ul{list-style:none;margin:0;padding:0}
+.docs a{display:flex;align-items:center;gap:16px;padding:15px 2px;text-decoration:none;border-bottom:1px solid var(--line,rgba(0,0,0,.1));transition:padding .25s,background-color .25s}
+.docs a:hover{padding-left:10px;padding-right:10px;background:var(--hover,rgba(0,0,0,.03))}
+.docs .ext{flex:none;min-width:44px;text-align:center;font:600 10.5px/1 ${SANS};letter-spacing:.08em;padding:6px 7px;border-radius:4px;border:1px solid currentColor;opacity:.75}
+.docs .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.docs .sz{opacity:.5;font-size:.85em;white-space:nowrap;font-variant-numeric:tabular-nums}
+.docs .dl{flex:none;width:18px;height:18px;opacity:.45;transition:transform .25s,opacity .25s}.docs a:hover .dl{transform:translateY(2px);opacity:1}
+.skip{position:absolute;left:-999px}.skip:focus{left:8px;top:8px;z-index:20;background:#fff;color:#000;padding:8px}
+.foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 24px;font-size:12.5px;opacity:.6}.foot a{text-decoration:none}.foot a:hover{text-decoration:underline}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
 `;
 
-function viewerBlock(d: SiteData, opts: { cinematic?: boolean } = {}) {
-  return `<div class="viewer" data-av-fullscreen><div data-archvista data-base="assets/" data-lang="${d.lang}"${opts.cinematic ? ' data-cinematic="1"' : ""}></div></div>`;
+const DL = `<svg class="dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>`;
+
+function viewer(d: SiteData, cls = "viewer", cinematic = false) {
+  return `<div class="${cls}" id="modell" data-av-fullscreen><div data-archvista data-base="assets/" data-lang="${d.lang}"${cinematic ? ' data-cinematic="1"' : ""}></div></div>`;
 }
-function scripts() {
-  return `<script type="module" src="assets/viewer.js"></script>`;
-}
-function factList(d: SiteData, cls = "facts") {
+const script = `<script type="module" src="assets/viewer.js"></script>`;
+function facts(d: SiteData, cls = "facts") {
   if (!d.facts.length) return "";
   return `<dl class="${cls}">${d.facts.map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(f.value)}</dd></div>`).join("")}</dl>`;
 }
-/** Download list, grouped by folder. Each design styles `.docs` itself. */
-function documents(d: SiteData) {
+/** Download list, grouped by folder. */
+function docs(d: SiteData) {
   if (!d.documents?.length) return "";
-  return `<div class="docs">${d.documents.map((g) => `<div class="docs-g">${d.documents!.length > 1 || g.folder ? `<h3>${esc(g.folder)}</h3>` : ""}<ul>${g.items.map((it) =>
-    `<li><a href="${esc(it.href)}"${it.open ? ' target="_blank" rel="noopener"' : " download"}><span class="ext">${esc(it.ext)}</span><span class="tt">${esc(it.title)}</span><span class="sz">${esc(it.size)}</span><span class="dl" aria-hidden="true">↓</span></a></li>`).join("")}</ul></div>`).join("")}</div>`;
+  const many = d.documents.length > 1;
+  return `<div class="docs">${d.documents.map((g) => `<div class="docs-g">${many || g.folder ? `<h3>${esc(g.folder)}</h3>` : ""}<ul>${g.items.map((it) =>
+    `<li><a href="${esc(it.href)}"${it.open ? ' target="_blank" rel="noopener"' : " download"}><span class="ext">${esc(it.ext)}</span><span class="tt">${esc(it.title)}</span><span class="sz">${esc(it.size)}</span>${DL}</a></li>`).join("")}</ul></div>`).join("")}</div>`;
+}
+const has = (d: SiteData) => ({ info: !!d.description.trim(), docs: !!d.documents?.length });
+function foot(d: SiteData, t: Tx, cls = "foot") {
+  return `<footer class="${cls}"><span>© ${d.year}${d.author ? " " + esc(d.author) : ""}</span><span><a href="credits.html">${t.credits}</a> · ${t.made}</span></footer>`;
+}
+/** Small in-page navigation: only links to sections that exist. */
+function nav(d: SiteData, t: Tx) {
+  const h = has(d);
+  return [`<a href="#modell">${t.model}</a>`, h.info ? `<a href="#projekt">${t.project}</a>` : "", h.docs ? `<a href="#plaene">${t.docs}</a>` : ""].join("");
 }
 
-function footer(d: SiteData, t: (typeof T)["de"]) {
-  return `<footer class="foot"><span>© ${d.year}${d.author ? " " + esc(d.author) : ""}</span><span><a href="credits.html">${t.credits}</a> · ${t.made}</span></footer>`;
-}
-const actions = (d: SiteData, t: (typeof T)["de"], cls = "btn") =>
-  `<a href="#erleben" class="${cls}" data-av-go="walk">${t.walk}</a>${d.hasTour ? `<a href="#erleben" class="${cls} ghost" data-av-go="tour">${t.tour}</a>` : ""}`;
-
-// ——— 1. Minimal Architecture ———
+// ——— 1. Minimal — white, quiet, the model as a large framed picture ———
 function minimal(d: SiteData) {
-  const t = T[d.lang];
+  const t = T[d.lang], h = has(d);
   return `${head(d, `
-body{font:17px/1.65 "Inter","Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;color:#151515;background:#fff;--radius:4px}
-.wrap{max-width:1240px;margin:0 auto;padding:0 28px}
-nav{display:flex;justify-content:space-between;align-items:center;height:72px;border-bottom:1px solid #eee;position:sticky;top:0;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);z-index:5}
-nav b{font-weight:600;letter-spacing:.02em}nav a{text-decoration:none;margin-left:28px;font-size:14px;color:#555}
-.hero{padding:96px 0 56px}.hero h1{font-size:clamp(40px,7vw,96px);line-height:1;font-weight:600;letter-spacing:-.03em;margin:0 0 24px;max-width:12ch}
-.hero p{font-size:20px;color:#555;max-width:56ch;margin:0}
-.heroimg{margin:48px 0 0;aspect-ratio:16/8;object-fit:cover;width:100%;border-radius:4px}
-section{padding:96px 0;border-top:1px solid #eee}h2{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#888;font-weight:500;margin:0 0 32px}
-.btn{display:inline-block;padding:14px 22px;background:#151515;color:#fff;text-decoration:none;border-radius:2px;margin-right:10px;font-size:15px}.btn.ghost{background:none;color:#151515;border:1px solid #151515}
-.cta{margin:28px 0 0}
-.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:32px;margin:0}.facts dt{font-size:13px;color:#888}.facts dd{margin:4px 0 0;font-size:30px;font-weight:500}
-.two{display:grid;grid-template-columns:1fr 1.4fr;gap:64px}.two .txt{font-size:19px}
-.hls{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:40px}.hls li{display:flex;gap:16px}.hls h3{margin:2px 0 8px;font-size:19px;font-weight:600}.hl-f{color:#888;font-size:14px}
-.gal{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}.gal img{aspect-ratio:3/2;object-fit:cover;border-radius:4px}
-.docs{grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px}.docs h3{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#888;font-weight:500}.docs .ext{background:#151515}
-.foot{display:flex;justify-content:space-between;padding:40px 28px;color:#888;font-size:13px;max-width:1240px;margin:0 auto;border-top:1px solid #eee;flex-wrap:wrap;gap:8px}
-@media (max-width:760px){.two{grid-template-columns:1fr;gap:24px}nav a{display:none}section{padding:64px 0}}
-`)}
-<body><a class="skip" href="#erleben">3D</a>
-<nav class="wrap"><b>${esc(d.title)}</b><span><a href="#erleben">${t.experience}</a><a href="#projekt">${t.project}</a>${d.documents?.length ? `<a href="#plaene">${t.docs}</a>` : ""}</span></nav>
-<header class="wrap hero"><h1>${esc(d.title)}</h1>${d.description ? `<p>${esc(firstSentence(d.description))}</p>` : ""}<div class="cta">${actions(d, t)}</div>
-${d.hero ? `<img class="heroimg" src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</header>
-<section id="erleben" class="wrap"><h2>${t.explore}</h2>${viewerBlock(d)}</section>
-<section id="projekt" class="wrap"><h2>${t.about}</h2><div class="two"><div>${factList(d)}<p style="color:#999;font-size:13px;margin-top:24px">${t.measured}</p></div><div class="txt">${paras(d.description)}${d.author ? `<p><small style="color:#888">${t.by}</small><br>${esc(d.author)}</p>` : ""}</div></div></section>
-${d.documents?.length ? `<section id="plaene" class="wrap"><h2>${t.docs}</h2>${documents(d)}</section>` : ""}
-${footer(d, t)}${scripts()}</body></html>`;
+body{font:16px/1.65 ${SANS};color:#141414;background:#fff;--line:#ececec}
+.w{max-width:1360px;margin:0 auto;padding:0 clamp(18px,3vw,40px)}
+header{display:flex;align-items:center;justify-content:space-between;height:68px;gap:20px}
+header b{font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header nav{display:flex;gap:28px;font-size:14px;color:#777}header nav a{text-decoration:none}header nav a:hover{color:#141414}
+.viewer{height:min(78svh,880px);min-height:440px;border-radius:6px}
+.intro{display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,6vw,96px);padding:clamp(48px,7vw,104px) 0;align-items:start}
+h1{font:600 clamp(36px,5vw,64px)/1.02 ${DISPLAY};letter-spacing:-.035em;margin:0 0 28px}
+.facts{font-size:15px}.facts dd{font-size:20px;font-weight:500}
+.txt{font-size:18px;line-height:1.7;color:#333;max-width:58ch}.by{margin-top:28px;font-size:14px;color:#888}
+section{padding:0 0 clamp(56px,7vw,104px)}h2{font:500 12px/1 ${SANS};letter-spacing:.16em;text-transform:uppercase;color:#999;margin:0 0 20px}
+.docs{grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:28px 64px}.docs h3{font-size:13px;color:#999;padding-bottom:6px}
+.foot{padding:28px 0 40px;border-top:1px solid #ececec}
+@media (max-width:820px){.intro{grid-template-columns:1fr}header nav{display:none}}
+`, "#ffffff")}
+<body><a class="skip" href="#modell">${t.model}</a>
+<header class="w"><b>${esc(d.title)}</b><nav>${nav(d, t)}</nav></header>
+<main class="w">${viewer(d)}
+<div class="intro" id="projekt"><div><h1>${esc(d.title)}</h1>${facts(d)}</div>${h.info || d.author ? `<div class="txt">${paras(d.description)}${d.author ? `<p class="by">${t.by} · ${esc(d.author)}</p>` : ""}</div>` : ""}</div>
+${h.docs ? `<section id="plaene"><h2>${t.docs}</h2>${docs(d)}</section>` : ""}
+${foot(d, t, "foot")}</main>${script}</body></html>`;
 }
 
-// ——— 2. Dark Luxury ———
+// ——— 2. Noir — the model fills the screen, title over it; dark, serif, refined ———
 function darkLuxury(d: SiteData) {
-  const t = T[d.lang];
+  const t = T[d.lang], h = has(d);
   return `${head(d, `
-body{font:17px/1.75 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;color:#e9e4da;background:#0b0b0c}
-.sans{font-family:"Inter","Segoe UI",system-ui,sans-serif}
-.hero{position:relative;height:100vh;min-height:560px;display:flex;align-items:flex-end;overflow:hidden}
-.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(1.04);filter:brightness(.62)}
-.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,11,12,.2) 0,rgba(11,11,12,.0) 40%,#0b0b0c 100%)}
-.hero .in{position:relative;z-index:1;padding:0 6vw 12vh;max-width:1100px}
-.kick{font:500 12px/1 "Inter","Segoe UI",system-ui,sans-serif;letter-spacing:.32em;text-transform:uppercase;color:var(--accent)}
-h1{font-weight:400;font-size:clamp(44px,8vw,120px);line-height:.98;margin:18px 0 28px;letter-spacing:-.01em}
-.btn{font:500 13px/1 "Inter","Segoe UI",system-ui,sans-serif;letter-spacing:.18em;text-transform:uppercase;display:inline-block;padding:18px 28px;border:1px solid var(--accent);color:#0b0b0c;background:var(--accent);text-decoration:none;margin:0 12px 12px 0}
-.btn.ghost{background:transparent;color:var(--accent)}
-section{padding:120px 6vw;max-width:1400px;margin:0 auto}
-h2{font-weight:400;font-size:clamp(30px,4vw,54px);margin:0 0 48px;line-height:1.1}
-.line{width:64px;height:1px;background:var(--accent);margin:0 0 28px}
-.viewer{height:min(86vh,900px);border:1px solid #2a2722}
-.facts{display:flex;flex-wrap:wrap;gap:64px;margin:0 0 56px}.facts dt{font:500 11px/1 "Inter",system-ui,sans-serif;letter-spacing:.24em;text-transform:uppercase;color:#8d8576}.facts dd{margin:12px 0 0;font-size:40px;color:var(--accent)}
-.txt{max-width:62ch;font-size:20px;color:#cfc8ba}
-.hls{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1px;background:#2a2722;border:1px solid #2a2722}.hls li{background:#0b0b0c;padding:36px;display:flex;gap:18px}.hls h3{font-weight:400;font-size:24px;margin:0 0 10px}.hl-n{background:transparent;border:1px solid var(--accent);color:var(--accent)}.hl-f{color:#8d8576;font-size:14px}
-.gal{grid-template-columns:repeat(12,1fr);--gap:20px}.gal figure{grid-column:span 6}.gal figure:nth-child(3n+1){grid-column:span 12}.gal img{width:100%;aspect-ratio:16/9;object-fit:cover}
-.docs{--docline:#2a2722;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px}.docs h3{font:500 11px/1 "Inter",system-ui,sans-serif;letter-spacing:.24em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}.docs a{font-size:19px;padding:16px 0}.docs .ext{background:transparent;border:1px solid var(--accent);color:var(--accent)}
-.foot{display:flex;justify-content:space-between;padding:48px 6vw;color:#6d675c;font:13px "Inter",system-ui,sans-serif;border-top:1px solid #1d1b18;flex-wrap:wrap;gap:8px}.foot a{color:#a69b84}
-@media (max-width:760px){.gal figure{grid-column:span 12!important}section{padding:80px 6vw}}
-`)}
-<body>
-<header class="hero">${d.hero ? `<img src="${esc(d.hero)}" alt="">` : ""}<div class="in"><div class="kick">${d.author ? esc(d.author) : t.project}</div><h1>${esc(d.title)}</h1>${actions(d, t)}</div></header>
-<section id="erleben"><div class="line"></div><h2>${t.explore}</h2>${viewerBlock(d)}</section>
-<section id="projekt"><div class="line"></div><h2>${t.about}</h2>${factList(d)}<div class="txt">${paras(d.description)}</div></section>
-${d.documents?.length ? `<section id="plaene"><div class="line"></div><h2>${t.docs}</h2>${documents(d)}</section>` : ""}
-${footer(d, t)}${scripts()}</body></html>`;
+body{font:17px/1.75 ${SERIF};color:#ece7dd;background:#0c0c0d;--line:rgba(236,231,221,.12);--hover:rgba(236,231,221,.04)}
+.stage{position:relative;height:100svh;min-height:520px}
+.viewer{position:absolute;inset:0}
+.cap{position:absolute;left:0;right:0;top:0;padding:clamp(22px,4vw,48px);pointer-events:none;background:linear-gradient(180deg,rgba(12,12,13,.72),rgba(12,12,13,0));z-index:2}
+.kick{font:500 11px/1 ${SANS};letter-spacing:.34em;text-transform:uppercase;color:var(--accent)}
+h1{font-weight:400;font-size:clamp(34px,5.4vw,76px);line-height:1.02;margin:14px 0 0;letter-spacing:-.01em;max-width:16ch}
+.down{position:absolute;right:clamp(22px,4vw,48px);bottom:34px;z-index:2;font:500 11px/1 ${SANS};letter-spacing:.3em;text-transform:uppercase;color:rgba(236,231,221,.7);text-decoration:none}
+.col{max-width:760px;margin:0 auto;padding:clamp(72px,10vw,140px) 24px 0}
+.rule{width:56px;height:1px;background:var(--accent);margin:0 0 40px}
+.txt{font-size:20px;line-height:1.8;color:#d9d3c7}.txt p:first-child::first-letter{float:left;font-size:3.3em;line-height:.9;padding:6px 10px 0 0;color:var(--accent)}
+.facts{margin-top:56px;font:15px/1.4 ${SANS};--fgap:24px 56px;padding-top:28px;border-top:1px solid var(--line)}.facts dd{font:400 26px/1.2 ${SERIF};color:#fff}
+h2{font:500 11px/1 ${SANS};letter-spacing:.34em;text-transform:uppercase;color:var(--accent);margin:0 0 28px}
+.docs h3{font:italic 18px ${SERIF};color:#bdb5a6}.docs .ext{color:var(--accent);opacity:1}
+.foot{max-width:760px;margin:0 auto;padding:110px 24px 48px;font-family:${SANS}}
+`, "#0c0c0d")}
+<body><a class="skip" href="#modell">${t.model}</a>
+<div class="stage">${viewer(d)}<div class="cap"><div class="kick">${esc(d.author || t.project)}</div><h1>${esc(d.title)}</h1></div>${h.info || h.docs ? `<a class="down" href="#projekt">${t.info} ↓</a>` : ""}</div>
+<main class="col" id="projekt"><div class="rule"></div>${h.info ? `<div class="txt">${paras(d.description)}</div>` : ""}${facts(d)}
+${h.docs ? `<section id="plaene" style="margin-top:96px"><h2>${t.docs}</h2>${docs(d)}</section>` : ""}</main>
+${foot(d, t)}${script}</body></html>`;
 }
 
-// ——— 3. Swiss Editorial ———
+// ——— 3. Swiss — strict grid, oversized grotesk, one signal colour ———
 function swiss(d: SiteData) {
-  const t = T[d.lang];
+  const t = T[d.lang], h = has(d);
   return `${head(d, `
-body{font:16px/1.5 "Helvetica Neue",Helvetica,"Arial Nova",Arial,sans-serif;color:#000;background:#f4f3ef}
-.g{display:grid;grid-template-columns:repeat(12,1fr);column-gap:20px;padding:0 20px}
-header.top{border-bottom:2px solid #000;padding:16px 20px;display:flex;justify-content:space-between;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.02em}
-header.top a{text-decoration:none;margin-left:20px}
-.hero{padding:40px 0 20px}.hero h1{grid-column:1/-1;font-size:clamp(56px,13vw,220px);line-height:.86;letter-spacing:-.045em;font-weight:700;margin:0}
-.hero .meta{grid-column:1/5;margin-top:28px;font-size:15px}.hero .lead{grid-column:6/12;margin-top:28px;font-size:22px;line-height:1.3;font-weight:500}
-.hero img{grid-column:1/-1;margin-top:40px;width:100%;aspect-ratio:21/9;object-fit:cover}
-.sec{border-top:2px solid #000;padding:20px 0 80px}.num{grid-column:1/3;font-weight:700;font-size:14px}.num span{color:var(--accent)}
-.sec h2{grid-column:3/-1;font-size:clamp(28px,4vw,56px);line-height:1;letter-spacing:-.02em;margin:0 0 32px;font-weight:700}
-.body{grid-column:3/-1}
-.btn{display:inline-block;background:var(--accent);color:#fff;font-weight:700;text-transform:uppercase;font-size:14px;padding:14px 18px;text-decoration:none;margin:0 8px 8px 0}.btn.ghost{background:#000}
-.facts{grid-column:3/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));border-top:1px solid #000;margin:0 0 32px}.facts div{border-right:1px solid #000;padding:10px 12px 18px 0}.facts dt{font-size:12px;text-transform:uppercase;font-weight:700}.facts dd{margin:20px 0 0;font-size:44px;font-weight:700;letter-spacing:-.03em}
-.cols{columns:2 320px;column-gap:20px;font-size:18px}
-.hls{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0;border-top:1px solid #000}.hls li{border-bottom:1px solid #000;padding:16px 16px 24px 0;display:flex;gap:14px}.hls h3{margin:0 0 6px;font-size:20px}.hl-n{border-radius:0;background:#000}.hl-f{font-size:13px}
-.gal{grid-template-columns:repeat(3,1fr);--gap:20px}.gal img{aspect-ratio:4/5;object-fit:cover;filter:grayscale(.1)}
-.viewer{height:min(80vh,820px)}
-.docs{--docline:#000;gap:32px}.docs h3{font-size:12px;text-transform:uppercase;font-weight:700;border-top:1px solid #000;padding-top:10px}.docs a{font-weight:700;font-size:17px}.docs .ext{border-radius:0;background:var(--accent)}
-.foot{display:flex;justify-content:space-between;border-top:2px solid #000;padding:16px 20px 40px;font-size:13px;font-weight:700;text-transform:uppercase;flex-wrap:wrap;gap:8px}
-@media (max-width:760px){.g>*{grid-column:1/-1!important}.gal{grid-template-columns:1fr}}
-`)}
-<body>
-<header class="top"><span>${esc(d.title)}</span><span><a href="#erleben">${t.experience}</a><a href="#projekt">${t.project}</a></span></header>
-<div class="g hero"><h1>${esc(d.title)}</h1><div class="meta">${d.author ? `${t.by}<br><b>${esc(d.author)}</b><br>` : ""}${d.year}</div><div class="lead">${esc(firstSentence(d.description))}<div style="margin-top:20px">${actions(d, t)}</div></div>${d.hero ? `<img src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</div>
-<div id="erleben" class="g sec"><div class="num"><span>01</span></div><h2>${t.explore}</h2><div class="body">${viewerBlock(d)}</div></div>
-<div id="projekt" class="g sec"><div class="num"><span>02</span></div><h2>${t.about}</h2>${factList(d)}<div class="body cols">${paras(d.description)}</div></div>
-${d.documents?.length ? `<div id="plaene" class="g sec"><div class="num"><span>03</span></div><h2>${t.docs}</h2><div class="body">${documents(d)}</div></div>` : ""}
-${footer(d, t)}${scripts()}</body></html>`;
+body{font:16px/1.5 ${SANS};color:#111;background:#f3f2ee;--line:#111;--hover:rgba(0,0,0,.04)}
+.g{display:grid;grid-template-columns:repeat(12,1fr);column-gap:20px;padding:0 clamp(16px,3vw,40px)}
+.top{padding-top:28px;padding-bottom:22px;align-items:end;border-bottom:2px solid #111}
+.mark{grid-column:span 2;display:flex;gap:10px;align-items:center;font-weight:700;font-size:13px;letter-spacing:.02em}.mark i{width:14px;height:14px;background:var(--accent);display:block}
+.top nav{grid-column:7/-1;display:flex;gap:24px;justify-content:flex-end;font-size:13px;font-weight:600}.top nav a{text-decoration:none}
+h1{grid-column:1/-1;font:700 clamp(44px,9.5vw,168px)/.88 ${DISPLAY};letter-spacing:-.055em;margin:clamp(40px,6vw,80px) 0 clamp(24px,3vw,40px)}
+.viewer{grid-column:1/-1;height:min(74svh,860px);min-height:420px}
+.lab{grid-column:span 3;font-weight:700;font-size:13px;padding-top:14px;border-top:2px solid #111}
+.body{grid-column:4/-1;padding-top:12px;border-top:2px solid #111}
+.row{margin-top:clamp(56px,7vw,96px)}
+.txt{font-size:21px;line-height:1.45;font-weight:500;max-width:34em;letter-spacing:-.005em}
+.facts{margin-top:36px;--fgap:20px 48px}.facts dt{opacity:1;font-weight:700;font-size:12px}.facts dd{font-size:28px;font-weight:700;letter-spacing:-.03em}
+.docs{gap:36px}.docs h3{font-weight:700;font-size:13px}.docs a{border-bottom-width:1px}.docs .ext{border:0;background:var(--accent);color:#fff;opacity:1;border-radius:0}
+.foot{grid-column:1/-1;margin-top:clamp(64px,8vw,120px);padding:16px 0 32px;border-top:2px solid #111;opacity:1;font-weight:600;font-size:12px}
+@media (max-width:820px){.lab,.body{grid-column:1/-1}.lab{border-top:2px solid #111}.body{border-top:0}.top nav{display:none}.mark{grid-column:1/-1}}
+`, "#f3f2ee")}
+<body><a class="skip" href="#modell">${t.model}</a>
+<header class="g top"><div class="mark"><i></i>${esc(d.author || "ARCHVISTA")}</div><nav>${nav(d, t)}</nav></header>
+<main class="g"><h1>${esc(d.title)}</h1>${viewer(d)}
+<div class="lab row" id="projekt">${t.project}</div><div class="body row">${h.info ? `<div class="txt">${paras(d.description)}</div>` : ""}${facts(d)}</div>
+${h.docs ? `<div class="lab row" id="plaene">${t.docs}</div><div class="body row">${docs(d)}</div>` : ""}
+${foot(d, t)}</main>${script}</body></html>`;
 }
 
-// ——— 4. Creative Portfolio ———
+// ——— 4. Atelier — split screen: calm info column left, model fills the right ———
 function portfolio(d: SiteData) {
-  const t = T[d.lang];
+  const t = T[d.lang], h = has(d);
   return `${head(d, `
-body{font:17px/1.6 "Inter","Segoe UI",system-ui,sans-serif;color:#17151f;background:#f6f4ff;--radius:28px}
-.wrap{max-width:1280px;margin:0 auto;padding:0 24px}
-nav{display:flex;justify-content:space-between;align-items:center;padding:22px 24px;max-width:1280px;margin:0 auto}
-nav b{font-size:18px}nav .pill{background:#17151f;color:#fff;padding:10px 18px;border-radius:99px;text-decoration:none;font-size:14px}
-.hero{display:grid;grid-template-columns:1.1fr 1fr;gap:24px;align-items:stretch;margin-top:12px}
-.card{background:#fff;border-radius:28px;padding:44px;box-shadow:0 1px 0 rgba(0,0,0,.04)}
-.hero .card.c1{background:var(--accent);color:#fff;display:flex;flex-direction:column;justify-content:space-between;min-height:520px}
-.hero h1{font-size:clamp(44px,6.4vw,92px);line-height:.95;margin:0;letter-spacing:-.035em;font-weight:800}
-.hero .imgc{padding:0;overflow:hidden}.hero .imgc img{width:100%;height:100%;object-fit:cover}
-.tag{display:inline-block;background:rgba(255,255,255,.18);padding:6px 12px;border-radius:99px;font-size:13px;margin-bottom:18px}
-.btn{display:inline-block;padding:15px 24px;border-radius:99px;background:#fff;color:#17151f;text-decoration:none;font-weight:600;margin:8px 8px 0 0}.btn.ghost{background:transparent;color:#fff;box-shadow:inset 0 0 0 2px rgba(255,255,255,.6)}
-section{margin:24px auto}
-h2{font-size:clamp(32px,4vw,52px);letter-spacing:-.03em;margin:0 0 24px;font-weight:800}
-.viewer{border-radius:28px;height:min(80vh,820px)}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
-.facts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0}.facts div{background:#f6f4ff;border-radius:18px;padding:18px}.facts dt{font-size:13px;color:#6b6780}.facts dd{margin:6px 0 0;font-size:32px;font-weight:800;color:var(--accent)}
-.hls{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.hls li{background:#fff;border-radius:22px;padding:26px;display:flex;gap:14px;transition:transform .2s}.hls li:hover{transform:translateY(-4px) rotate(-.3deg)}.hls h3{margin:0 0 6px}.hl-f{color:#6b6780;font-size:14px}
-.gal{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));--gap:16px}.gal img{border-radius:22px;aspect-ratio:1;object-fit:cover}.gal figure:nth-child(2n) img{aspect-ratio:4/5}
-.docs{grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}.docs h3{font-size:15px;font-weight:800}.docs a{border:0;background:#f6f4ff;border-radius:14px;margin-bottom:8px;padding:12px 14px}.docs a:hover{background:#ece8ff}.docs .ext{border-radius:99px}
-.foot{display:flex;justify-content:space-between;max-width:1280px;margin:40px auto;padding:0 24px;color:#6b6780;font-size:14px;flex-wrap:wrap;gap:8px}
-@media (max-width:860px){.hero,.grid2{grid-template-columns:1fr}.hero .card.c1{min-height:380px}.card{padding:28px}}
-`)}
-<body>
-<nav><b>${esc(d.title)}</b><a class="pill" href="#erleben">${t.explore} →</a></nav>
-<div class="wrap hero"><div class="card c1"><div><span class="tag">${d.author ? esc(d.author) : t.project} · ${d.year}</span><h1>${esc(d.title)}</h1></div><div>${actions(d, t)}</div></div><div class="card imgc">${d.hero ? `<img src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</div></div>
-<section id="erleben" class="wrap"><div class="card"><h2>${t.explore}</h2>${viewerBlock(d)}</div></section>
-<section id="projekt" class="wrap grid2"><div class="card"><h2>${t.about}</h2>${paras(d.description)}</div><div class="card"><h2>${t.facts}</h2>${factList(d)}<p style="color:#6b6780;font-size:13px">${t.measured}</p></div></section>
-${d.documents?.length ? `<section id="plaene" class="wrap"><div class="card"><h2>${t.docs}</h2>${documents(d)}</div></section>` : ""}
-${footer(d, t)}${scripts()}</body></html>`;
+body{font:15.5px/1.65 ${SANS};color:#1d1c1a;background:#faf9f7;--line:#e7e3dc}
+.split{display:grid;grid-template-columns:minmax(340px,420px) 1fr;min-height:100svh}
+aside{padding:clamp(28px,3.4vw,52px);display:flex;flex-direction:column;gap:40px;border-right:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#8b857a}.brand i{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+h1{font:600 clamp(30px,2.8vw,44px)/1.08 ${DISPLAY};letter-spacing:-.03em;margin:0}
+.by{margin-top:12px;color:#8b857a}
+.txt{color:#45423d}
+.facts{--fgap:18px 32px;font-size:14px}.facts dd{font-size:17px;font-weight:600}
+h2{font:600 11px/1 ${SANS};letter-spacing:.16em;text-transform:uppercase;color:#8b857a;margin:0 0 10px}
+.docs{gap:22px}.docs h3{font-weight:600;font-size:13px}.docs a{padding:12px 2px;font-size:14.5px}
+.foot{margin-top:auto;padding-top:24px;border-top:1px solid var(--line);flex-direction:column;gap:4px}
+.viewer{position:sticky;top:0;height:100svh}
+@media (max-width:900px){.split{grid-template-columns:1fr}.viewer{position:relative;height:72svh;order:-1}aside{border-right:0}}
+`, "#faf9f7")}
+<body><a class="skip" href="#modell">${t.model}</a>
+<div class="split"><aside><div class="brand"><i></i>${t.project}</div>
+<div id="projekt"><h1>${esc(d.title)}</h1>${d.author ? `<div class="by">${esc(d.author)}</div>` : ""}</div>
+${h.info ? `<div class="txt">${paras(d.description)}</div>` : ""}${facts(d)}
+${h.docs ? `<section id="plaene"><h2>${t.docs}</h2>${docs(d)}</section>` : ""}
+${foot(d, t)}</aside>${viewer(d)}</div>${script}</body></html>`;
 }
 
-// ——— 5. Nature & Material ———
+// ——— 5. Papier — warm paper, serif, the model set like a plate in a book ———
 function nature(d: SiteData) {
-  const t = T[d.lang];
+  const t = T[d.lang], h = has(d);
   return `${head(d, `
-body{font:18px/1.7 "Iowan Old Style","Palatino Linotype",Georgia,serif;color:#2c2a24;background:#f1ece2;--radius:220px 220px 18px 18px}
-.sans{font-family:"Inter","Segoe UI",system-ui,sans-serif}
-.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
-nav{display:flex;justify-content:center;gap:36px;padding:28px;font:500 13px "Inter",system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase}nav a{text-decoration:none;color:#6c6650}
-.hero{text-align:center;padding:40px 0 80px}
-.hero .k{font:500 13px "Inter",system-ui,sans-serif;letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
-.hero h1{font-weight:400;font-style:italic;font-size:clamp(46px,7vw,104px);line-height:1.02;margin:18px auto 28px;max-width:14ch}
-.hero img{width:min(820px,100%);margin:48px auto 0;aspect-ratio:4/5;object-fit:cover;border-radius:420px 420px 24px 24px}
-.btn{font:600 14px "Inter",system-ui,sans-serif;display:inline-block;padding:15px 26px;border-radius:99px;background:var(--accent);color:#fff;text-decoration:none;margin:6px}.btn.ghost{background:transparent;color:#2c2a24;box-shadow:inset 0 0 0 1px #2c2a24}
-section{padding:90px 0}
-h2{font-weight:400;font-style:italic;font-size:clamp(34px,4vw,56px);text-align:center;margin:0 0 44px}
-.viewer{border-radius:24px;height:min(78vh,800px);box-shadow:0 30px 80px rgba(60,50,30,.25)}
-.leaf{display:block;margin:0 auto 20px;width:34px;height:34px;color:var(--accent)}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:start}
-.facts{margin:0;font-family:"Inter",system-ui,sans-serif}.facts div{display:flex;justify-content:space-between;border-bottom:1px solid #d4ccb9;padding:16px 0}.facts dt{color:#6c6650}.facts dd{margin:0;font-weight:600}
-.hls{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:28px}.hls li{background:#faf7f0;border-radius:18px;padding:30px;display:flex;gap:16px}.hls h3{font-weight:400;font-size:24px;margin:0 0 8px}.hl-f{font:13px "Inter",system-ui,sans-serif;color:#8a836b}
-.gal{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));--gap:28px}.gal img{border-radius:18px;aspect-ratio:4/5;object-fit:cover}.gal figure:nth-child(odd){margin-top:48px}
-.docs{--docline:#d4ccb9;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px;font-family:"Inter",system-ui,sans-serif}.docs h3{font:400 italic 26px "Iowan Old Style",Georgia,serif}.docs .ext{border-radius:99px}
-.foot{display:flex;justify-content:space-between;padding:40px 28px;max-width:1180px;margin:0 auto;font:13px "Inter",system-ui,sans-serif;color:#8a836b;border-top:1px solid #d4ccb9;flex-wrap:wrap;gap:8px}
-@media (max-width:820px){.two{grid-template-columns:1fr;gap:32px}.gal figure:nth-child(odd){margin-top:0}}
-`)}
-<body>
-<nav><a href="#erleben">${t.experience}</a><a href="#projekt">${t.project}</a>${d.documents?.length ? `<a href="#plaene">${t.docs}</a>` : ""}</nav>
-<header class="wrap hero"><div class="k">${d.author ? esc(d.author) : t.project}</div><h1>${esc(d.title)}</h1>${actions(d, t)}${d.hero ? `<img src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</header>
-<section id="erleben" class="wrap">${LEAF}<h2>${t.explore}</h2>${viewerBlock(d)}</section>
-<section id="projekt" class="wrap">${LEAF}<h2>${t.about}</h2><div class="two"><div>${paras(d.description)}</div><div>${factList(d)}<p style="font:13px Inter,system-ui,sans-serif;color:#8a836b">${t.measured}</p></div></div></section>
-${d.documents?.length ? `<section id="plaene" class="wrap">${LEAF}<h2>${t.docs}</h2>${documents(d)}</section>` : ""}
-${footer(d, t)}${scripts()}</body></html>`;
+body{font:18px/1.7 ${SERIF};color:#2b2822;background:#efe9df;--line:rgba(43,40,34,.14);--hover:rgba(43,40,34,.04)}
+.w{max-width:1280px;margin:0 auto;padding:0 clamp(16px,3vw,40px)}
+header.w{text-align:center;padding-top:clamp(48px,7vw,96px);padding-bottom:clamp(32px,4vw,52px)}
+.kick{font:500 12px/1 ${SANS};letter-spacing:.24em;text-transform:uppercase;color:var(--accent)}
+h1{font-weight:400;font-size:clamp(38px,6vw,84px);line-height:1.02;letter-spacing:-.015em;margin:18px auto 0;max-width:14ch}
+.plate{background:#f8f4ec;padding:clamp(10px,1.4vw,18px);border-radius:22px;box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 30px 60px -30px rgba(60,45,20,.35)}
+.viewer{height:min(76svh,860px);min-height:420px;border-radius:14px}
+.col{max-width:700px;margin:0 auto;padding:clamp(56px,8vw,112px) 0 0}
+.orn{display:block;width:26px;height:26px;margin:0 auto 34px;color:var(--accent)}
+.txt{font-size:20px}
+.facts{justify-content:center;text-align:center;margin-top:48px;font:14px/1.4 ${SANS};--fgap:20px 48px}.facts dd{font:400 24px/1.2 ${SERIF}}
+h2{text-align:center;font-weight:400;font-size:30px;margin:0 0 28px}
+.docs h3{font:italic 18px ${SERIF};opacity:.75}.docs .ext{color:var(--accent);opacity:1}
+.foot{max-width:700px;margin:0 auto;padding:96px 0 48px;font-family:${SANS};justify-content:center;text-align:center}
+`, "#efe9df")}
+<body><a class="skip" href="#modell">${t.model}</a>
+<header class="w"><div class="kick">${esc(d.author || t.project)}</div><h1>${esc(d.title)}</h1></header>
+<main class="w"><div class="plate">${viewer(d)}</div>
+<div class="col" id="projekt"><svg class="orn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M3 20 12 5l9 15z"/><path d="M8 20v-5h8v5"/></svg>${h.info ? `<div class="txt">${paras(d.description)}</div>` : ""}${facts(d)}</div>
+${h.docs ? `<section class="col" id="plaene"><h2>${t.docs}</h2>${docs(d)}</section>` : ""}
+</main>${foot(d, t)}${script}</body></html>`;
 }
-const LEAF = `<svg class="leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M5 19C5 10 11 4 20 4c0 9-6 15-15 15Z"/><path d="M5 19 14 10"/></svg>`;
 
-// ——— 6. Immersive Cinema ———
+// ——— 6. Kino — nothing but the model; information slides in on request ———
 function cinema(d: SiteData) {
-  const t = T[d.lang];
+  const t = T[d.lang], h = has(d);
   return `${head(d, `
-body{font:16px/1.6 "Inter","Segoe UI",system-ui,sans-serif;color:#f2f2f2;background:#000}
-.stage{position:relative;height:100vh;height:100svh}
-.stage .viewer{position:absolute;inset:0;height:auto;min-height:0;border-radius:0}
-.bars::before,.bars::after{content:"";position:absolute;left:0;right:0;height:6vh;background:#000;z-index:2;pointer-events:none}.bars::before{top:0}.bars::after{bottom:0}
-.title{position:absolute;left:5vw;top:12vh;z-index:3;pointer-events:none;max-width:70vw}
-.title h1{font-size:clamp(40px,8vw,128px);line-height:.9;letter-spacing:-.04em;margin:0;font-weight:800;text-shadow:0 10px 50px rgba(0,0,0,.6)}
-.title .k{color:var(--accent);letter-spacing:.3em;text-transform:uppercase;font-size:12px;font-weight:600}
-.title .cta{pointer-events:auto;margin-top:22px}
-.btn{display:inline-block;padding:13px 20px;background:var(--accent);color:#000;font-weight:700;text-decoration:none;margin:0 10px 10px 0;border-radius:2px}.btn.ghost{background:rgba(255,255,255,.12);color:#fff;backdrop-filter:blur(8px)}
-.scroll{position:absolute;right:5vw;bottom:9vh;z-index:3;font-size:11px;letter-spacing:.3em;text-transform:uppercase;opacity:.7}
-section{max-width:1200px;margin:0 auto;padding:120px 5vw}
-h2{font-size:clamp(28px,4vw,60px);letter-spacing:-.03em;margin:0 0 40px;font-weight:800}
-h2 em{color:var(--accent);font-style:normal}
-.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;margin:0 0 48px}.facts dt{font-size:12px;letter-spacing:.2em;text-transform:uppercase;opacity:.6}.facts dd{margin:8px 0 0;font-size:46px;font-weight:800}
-.txt{font-size:22px;max-width:60ch;color:#cfcfcf}
-.hls{list-style:none;padding:0;margin:0;counter-reset:x}.hls li{display:flex;gap:20px;padding:28px 0;border-top:1px solid #222}.hls h3{margin:0 0 6px;font-size:24px}.hl-n{background:none;border:1px solid var(--accent);color:var(--accent)}.hl-f{opacity:.6;font-size:14px}
-.gal{grid-template-columns:1fr;--gap:6px}.gal img{width:100%;aspect-ratio:2.39/1;object-fit:cover}.gal figcaption{padding:8px 0 20px}
-.docs{--docline:#222;gap:36px}.docs h3{font-size:12px;letter-spacing:.2em;text-transform:uppercase;opacity:.6;font-weight:600}.docs a{font-size:20px;font-weight:700;padding:18px 0}.docs .ext{background:none;border:1px solid var(--accent);color:var(--accent);border-radius:2px}
-.foot{display:flex;justify-content:space-between;padding:40px 5vw;color:#777;font-size:13px;border-top:1px solid #222;flex-wrap:wrap;gap:8px}
-`)}
-<body>
-<div class="stage bars" id="erleben">${viewerBlock(d, { cinematic: true })}<div class="title"><div class="k">${d.author ? esc(d.author) : t.project}</div><h1>${esc(d.title)}</h1><div class="cta">${actions(d, t)}</div></div><div class="scroll">${t.scroll} ↓</div></div>
-<section id="projekt"><h2>${t.about.split(" ").slice(0, -1).join(" ")} <em>${t.about.split(" ").slice(-1)[0]}</em></h2>${factList(d)}<div class="txt">${paras(d.description)}</div></section>
-${d.documents?.length ? `<section id="plaene"><h2>${t.docs}</h2>${documents(d)}</section>` : ""}
-${footer(d, t)}${scripts()}</body></html>`;
+html,body{height:100%;overflow:hidden}
+body{font:15.5px/1.65 ${SANS};color:#f2f2f2;background:#000;--line:rgba(255,255,255,.12);--hover:rgba(255,255,255,.05)}
+.viewer{position:fixed;inset:0;background:#000}
+.bar{position:fixed;left:0;right:0;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px clamp(16px,2.6vw,32px);background:linear-gradient(180deg,rgba(0,0,0,.6),rgba(0,0,0,0));pointer-events:none}
+.bar b{font-weight:600;letter-spacing:.01em;font-size:15px;text-shadow:0 1px 8px rgba(0,0,0,.5)}.bar b span{opacity:.6;font-weight:400;margin-left:10px}
+.open{pointer-events:auto;font:600 13px/1 ${SANS};color:#fff;text-decoration:none;padding:10px 16px;border-radius:999px;background:rgba(20,20,20,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.14)}
+.open:hover{background:var(--accent);border-color:var(--accent)}
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:10;width:min(440px,100%);padding:72px clamp(22px,3vw,40px) 32px;overflow:auto;background:rgba(14,14,15,.9);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border-left:1px solid var(--line);transform:translateX(102%);transition:transform .45s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;gap:36px}.drawer>*{flex-shrink:0}
+.drawer:target{transform:none}
+.x{position:absolute;top:18px;right:18px;color:#fff;text-decoration:none;font-size:13px;opacity:.7}.x:hover{opacity:1}
+h1{font:600 30px/1.1 ${DISPLAY};letter-spacing:-.025em;margin:0}.by{opacity:.6;margin-top:8px}
+.txt{color:#cfcfcf}
+.facts{--fgap:16px 32px;font-size:14px}.facts dd{font-size:17px;font-weight:600}
+h2{font:600 11px/1 ${SANS};letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+.docs a{padding:12px 2px}.docs h3{font-weight:600;font-size:13px;opacity:.7}
+.foot{margin-top:auto}
+`, "#000000")}
+<body><a class="skip" href="#modell">${t.model}</a>
+${viewer(d, "viewer", true)}
+<div class="bar"><b>${esc(d.title)}${d.author ? `<span>${esc(d.author)}</span>` : ""}</b><a class="open" href="#info">${h.docs && !h.info ? t.docs : t.info}</a></div>
+<aside class="drawer" id="info"><a class="x" href="#modell">${t.close} ✕</a>
+<div id="projekt"><h1>${esc(d.title)}</h1>${d.author ? `<div class="by">${esc(d.author)}</div>` : ""}</div>
+${h.info ? `<div class="txt">${paras(d.description)}</div>` : ""}${facts(d)}
+${h.docs ? `<section id="plaene"><h2>${t.docs}</h2>${docs(d)}</section>` : ""}
+${foot(d, t)}</aside>${script}</body></html>`;
 }
 
-function firstSentence(s: string) {
-  const m = s.trim().match(/^.{0,220}?[.!?](\s|$)/);
-  return m ? m[0].trim() : s.trim().slice(0, 220);
+// ——— 7. Monografie — centred, book-like, the model in a passe-partout ———
+function monograph(d: SiteData) {
+  const t = T[d.lang], h = has(d);
+  return `${head(d, `
+body{font:17px/1.75 ${SERIF};color:#222;background:#fbfbfa;--line:#e6e4df}
+header{text-align:center;padding:clamp(56px,8vw,120px) 24px clamp(40px,5vw,72px)}
+.sc{font:500 11.5px/1 ${SANS};letter-spacing:.3em;text-transform:uppercase;color:#999}
+h1{font-weight:400;font-style:italic;font-size:clamp(40px,6.4vw,92px);line-height:1;letter-spacing:-.02em;margin:22px 0 18px}
+.by{font:14px/1 ${SANS};color:#777}.by::before,.by::after{content:"";display:inline-block;width:28px;height:1px;background:#bbb;vertical-align:middle;margin:0 14px}
+.mat{max-width:1240px;margin:0 auto;padding:clamp(14px,3.4vw,52px);background:#efeeea}
+.viewer{height:min(70svh,780px);min-height:400px;box-shadow:0 0 0 1px rgba(0,0,0,.06)}
+.col{max-width:640px;margin:0 auto;padding:clamp(64px,9vw,128px) 24px 0}
+.txt{text-align:justify;hyphens:auto;-webkit-hyphens:auto}.txt p+p{text-indent:1.6em;margin-top:-.4em}
+.facts{margin-top:56px;justify-content:center;text-align:center;font:13px/1.4 ${SANS};--fgap:18px 44px}.facts dd{font:italic 22px/1.2 ${SERIF};color:#222}
+h2{text-align:center;font:500 11.5px/1 ${SANS};letter-spacing:.3em;text-transform:uppercase;color:#999;margin:0 0 30px}
+.docs h3{font:italic 17px ${SERIF};color:#666}
+.foot{max-width:640px;margin:0 auto;padding:110px 24px 48px;font-family:${SANS};justify-content:center}
+`, "#fbfbfa")}
+<body><a class="skip" href="#modell">${t.model}</a>
+<header><div class="sc">${t.project} · ${d.year}</div><h1>${esc(d.title)}</h1>${d.author ? `<div class="by">${esc(d.author)}</div>` : ""}</header>
+<main><div class="mat">${viewer(d)}</div>
+${h.info || d.facts.length ? `<div class="col" id="projekt">${h.info ? `<div class="txt">${paras(d.description)}</div>` : ""}${facts(d)}</div>` : ""}
+${h.docs ? `<section class="col" id="plaene"><h2>${t.docs}</h2>${docs(d)}</section>` : ""}</main>
+${foot(d, t)}${script}</body></html>`;
+}
+
+// ——— 8. Plan — a drawing sheet: grid paper, hairlines, title block ———
+function blueprint(d: SiteData) {
+  const t = T[d.lang], h = has(d);
+  const date = new Date(d.year, 0, 1).getFullYear();
+  return `${head(d, `
+body{font:14.5px/1.6 ${MONO};color:#dfe7f3;background:#0f2238;background-image:linear-gradient(rgba(150,190,240,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(150,190,240,.07) 1px,transparent 1px),linear-gradient(rgba(150,190,240,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(150,190,240,.035) 1px,transparent 1px);background-size:120px 120px,120px 120px,24px 24px,24px 24px;--line:rgba(200,220,245,.18);--hover:rgba(200,220,245,.05)}
+.sheet{max-width:1400px;margin:clamp(14px,2.4vw,36px) auto;border:1px solid rgba(200,220,245,.55);outline:1px solid rgba(200,220,245,.2);outline-offset:6px}
+.top{display:flex;justify-content:space-between;gap:16px;padding:12px 18px;border-bottom:1px solid rgba(200,220,245,.55);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.top nav{display:flex;gap:20px}.top a{text-decoration:none;opacity:.8}.top a:hover{opacity:1;color:var(--accent)}
+.viewer{height:min(72svh,820px);min-height:400px;border-bottom:1px solid rgba(200,220,245,.55)}
+.low{display:grid;grid-template-columns:1fr minmax(300px,420px)}
+.notes{padding:28px;border-right:1px solid rgba(200,220,245,.55)}
+.lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 12px}
+.txt{font:15.5px/1.7 ${SANS};color:#cdd8e8;max-width:62ch}
+.tb{display:grid;grid-template-columns:auto 1fr;font-size:12.5px}
+.tb div{padding:10px 14px;border-bottom:1px solid rgba(200,220,245,.3)}.tb div:nth-child(odd){color:rgba(223,231,243,.55);border-right:1px solid rgba(200,220,245,.3);text-transform:uppercase;letter-spacing:.08em;font-size:11px}
+.tbw .big{font:600 22px/1.15 ${SANS};letter-spacing:-.01em;color:#fff;padding:16px 14px;border-bottom:1px solid rgba(200,220,245,.3)}
+.reg{padding:28px;border-top:1px solid rgba(200,220,245,.55)}
+.docs{grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:24px 48px}.docs h3{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.6}.docs .ext{color:var(--accent);opacity:1;border-radius:0}
+.foot{padding:12px 18px;border-top:1px solid rgba(200,220,245,.55);font-size:11px;letter-spacing:.06em;opacity:.65}
+@media (max-width:860px){.low{grid-template-columns:1fr}.notes{border-right:0;border-bottom:1px solid rgba(200,220,245,.55)}.top nav{display:none}}
+`, "#0f2238")}
+<body><a class="skip" href="#modell">${t.model}</a>
+<div class="sheet"><div class="top"><span>${esc(d.title)}</span><nav>${nav(d, t)}</nav></div>
+${viewer(d)}
+<div class="low" id="projekt"><div class="notes">${h.info ? `<p class="lab">${t.project}</p><div class="txt">${paras(d.description)}</div>` : `<p class="lab">${t.model}</p><div class="txt">${t.hint}</div>`}</div>
+<div class="tbw"><div class="big">${esc(d.title)}</div><div class="tb">${d.author ? `<div>${t.by}</div><div>${esc(d.author)}</div>` : ""}${d.facts.map((f) => `<div>${esc(f.label)}</div><div>${esc(f.value)}</div>`).join("")}<div>${t.date}</div><div>${date}</div><div>${t.sheet}</div><div>3D · 1/1</div></div></div></div>
+${h.docs ? `<section class="reg" id="plaene"><p class="lab">${t.docs}</p>${docs(d)}</section>` : ""}
+${foot(d, t)}</div>${script}</body></html>`;
+}
+
+// ——— 9. Studio — dark split: big model left, slim information column right ———
+function studio(d: SiteData) {
+  const t = T[d.lang], h = has(d);
+  return `${head(d, `
+body{font:15px/1.65 ${SANS};color:#e8e8e6;background:#151517;--line:rgba(255,255,255,.09);--hover:rgba(255,255,255,.04)}
+.split{display:grid;grid-template-columns:1fr minmax(320px,400px);height:100svh}
+.viewer{height:100%;background:#0e0e10}
+aside{overflow:auto;padding:clamp(28px,3vw,44px);display:flex;flex-direction:column;gap:36px;background:#1b1b1e;border-left:1px solid var(--line)}aside>*{flex-shrink:0}
+.tag{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#9a9a96}.tag i{width:18px;height:2px;background:var(--accent)}
+h1{font:600 clamp(28px,2.4vw,38px)/1.1 ${DISPLAY};letter-spacing:-.025em;margin:14px 0 0;color:#fff}
+.by{margin-top:10px;color:#9a9a96}
+.txt{color:#b9b9b5}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}.facts div{background:#1b1b1e;padding:14px 16px}.facts dd{font-size:18px;font-weight:600;color:#fff}
+h2{font:600 11px/1 ${SANS};letter-spacing:.16em;text-transform:uppercase;color:#9a9a96;margin:0 0 6px}
+.docs{gap:20px}.docs h3{font-size:12.5px;font-weight:600;color:#9a9a96}.docs a{padding:12px 4px}.docs .ext{color:var(--accent);opacity:1}
+.foot{margin-top:auto;flex-direction:column;gap:4px}
+@media (max-width:900px){.split{grid-template-columns:1fr;height:auto}.viewer{height:70svh}aside{border-left:0}}
+`, "#151517")}
+<body><a class="skip" href="#modell">${t.model}</a>
+<div class="split">${viewer(d)}<aside><div id="projekt"><span class="tag"><i></i>${t.project}</span><h1>${esc(d.title)}</h1>${d.author ? `<div class="by">${esc(d.author)}</div>` : ""}</div>
+${h.info ? `<div class="txt">${paras(d.description)}</div>` : ""}${facts(d)}
+${h.docs ? `<section id="plaene"><h2>${t.docs}</h2>${docs(d)}</section>` : ""}
+${foot(d, t)}</aside></div>${script}</body></html>`;
+}
+
+// ——— 10. Beton — raw concrete grey, heavy uppercase, thick rules ———
+function beton(d: SiteData) {
+  const t = T[d.lang], h = has(d);
+  return `${head(d, `
+body{font:16px/1.55 ${SANS};color:#161616;background:#d6d4cf;--line:#161616;--hover:rgba(0,0,0,.05)}
+.w{padding:0 clamp(14px,2.4vw,32px)}
+header{display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:6px solid #161616;font:700 12px/1 ${SANS};letter-spacing:.12em;text-transform:uppercase}
+header nav{display:flex;gap:22px}header a{text-decoration:none}header a:hover{color:var(--accent)}
+h1{font:800 clamp(48px,11vw,200px)/.84 ${DISPLAY};letter-spacing:-.05em;text-transform:uppercase;margin:clamp(28px,4vw,56px) 0 clamp(20px,3vw,40px);overflow-wrap:anywhere}
+.viewer{height:min(76svh,880px);min-height:420px;outline:6px solid #161616}
+.blocks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:0;margin-top:clamp(48px,6vw,88px);border-top:6px solid #161616}
+.blk{padding:28px 28px 36px 0}.blk+.blk{padding-left:28px;border-left:2px solid #161616}
+.no{font:800 13px/1 ${SANS};letter-spacing:.1em;margin-bottom:18px}.no b{color:var(--accent)}
+.txt{font-size:19px;line-height:1.5;font-weight:500;max-width:44ch}
+.facts{--fgap:18px 40px}.facts dt{opacity:1;font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.1em}.facts dd{font:800 34px/1 ${DISPLAY};letter-spacing:-.04em}
+.docs h3{font-weight:800;text-transform:uppercase;font-size:12px;letter-spacing:.1em}.docs a{border-bottom:2px solid #161616}.docs .ext{border:2px solid #161616;border-radius:0;opacity:1;font-weight:800}
+.foot{margin-top:clamp(48px,6vw,88px);padding:16px 0 28px;border-top:6px solid #161616;opacity:1;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+@media (max-width:860px){.blk+.blk{padding-left:0;border-left:0;border-top:2px solid #161616}header nav{display:none}}
+`, "#d6d4cf")}
+<body><a class="skip" href="#modell">${t.model}</a>
+<div class="w"><header><span>${esc(d.author || "ARCHVISTA")}</span><nav>${nav(d, t)}</nav></header>
+<h1>${esc(d.title)}</h1>${viewer(d)}
+<div class="blocks" id="projekt">${h.info ? `<div class="blk"><div class="no"><b>01</b> ${t.project}</div><div class="txt">${paras(d.description)}</div></div>` : ""}<div class="blk"><div class="no"><b>${h.info ? "02" : "01"}</b> ${t.model}</div>${facts(d)}</div></div>
+${h.docs ? `<div class="blocks" id="plaene"><div class="blk" style="grid-column:1/-1;padding-right:0"><div class="no"><b>${h.info ? "03" : "02"}</b> ${t.docs}</div>${docs(d)}</div></div>` : ""}
+${foot(d, t)}</div>${script}</body></html>`;
 }
 
 export const RENDERERS: Record<TemplateId, (d: SiteData) => string> = {
-  minimal, "dark-luxury": darkLuxury, swiss, portfolio, nature, cinema,
+  minimal, "dark-luxury": darkLuxury, swiss, portfolio, nature, cinema, monograph, blueprint, studio, beton,
 };
 
 export function renderTemplate(id: TemplateId, d: SiteData): string {
-  return RENDERERS[id](d).replace("ACCENT", d.accent);
+  return (RENDERERS[id] ?? minimal)(d).replace("ACCENT", d.accent);
 }
