@@ -44,6 +44,7 @@ jobs:
             Keine weiteren Programme nötig (kein AutoCAD, Blender oder Python). Windows 10/11, 64 Bit.
           releaseDraft: false
           includeUpdaterJson: true
+          prerelease: false
       - name: Stable download link (…/releases/latest/download/ARCHVISTA-Setup.exe)
         shell: bash
         env:
@@ -53,4 +54,3 @@ jobs:
           EXE=$(ls src-tauri/target/release/bundle/nsis/*-setup.exe | head -1)
           cp "$EXE" ARCHVISTA-Setup.exe
           gh release upload "v$VERSION" ARCHVISTA-Setup.exe --clobber
-          prerelease: false
