@@ -184,7 +184,14 @@ async function idbGet(key: string): Promise<Uint8Array | null> {
 let swReady: Promise<ServiceWorkerRegistration> | null = null;
 async function servePreviewViaServiceWorker(files: Map<string, Uint8Array>): Promise<string> {
   if (!("serviceWorker" in navigator)) throw new Error("Vorschau benötigt einen aktuellen Browser.");
-  swReady ??= navigator.serviceWorker.register("/preview-sw.js", { scope: "/__preview/" }).then(() => navigator.serviceWorker.ready);
+  // `serviceWorker.ready` only resolves for workers controlling *this* page's scope, so wait for activation directly
+  swReady ??= navigator.serviceWorker.register("/preview-sw.js", { scope: "/__preview/" }).then((reg) => new Promise<ServiceWorkerRegistration>((res) => {
+    const done = () => { if (reg.active) res(reg); };
+    if (reg.active) return res(reg);
+    const w = reg.installing ?? reg.waiting;
+    w?.addEventListener("statechange", () => { if (w.state === "activated") done(); });
+    setTimeout(done, 3000);
+  }));
   const reg = await swReady;
   const sw = reg.active ?? reg.waiting ?? reg.installing;
   const payload: Record<string, Uint8Array> = {};
