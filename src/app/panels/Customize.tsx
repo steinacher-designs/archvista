@@ -115,8 +115,8 @@ function Texts() {
   const p = project!;
   const addImages = async (files: FileList | null) => {
     if (!files) return;
-    const list = await Promise.all([...files].slice(0, 12).map((f) => new Promise<{ name: string; dataUrl: string }>((res) => { const r = new FileReader(); r.onload = () => res({ name: f.name, dataUrl: r.result as string }); r.readAsDataURL(f); })));
-    update((pp) => { pp.images.push(...list.map((x) => ({ ...x, caption: x.name.replace(/\.[^.]+$/, "") }))); });
+    const list = await Promise.all([...files].slice(0, 1).map((f) => new Promise<{ name: string; dataUrl: string }>((res) => { const r = new FileReader(); r.onload = () => res({ name: f.name, dataUrl: r.result as string }); r.readAsDataURL(f); })));
+    update((pp) => { pp.images = list.map((x) => ({ ...x, caption: x.name.replace(/\.[^.]+$/, "") })); });
   };
   const u = model!.units;
   return (
@@ -135,7 +135,7 @@ function Texts() {
             </div>
           ))}
         </div>
-        <label className="btn ghost small" style={{ marginTop: 8 }}>{t.addImages}<input type="file" accept="image/*" multiple hidden onChange={(e) => addImages(e.target.files)} /></label>
+        <label className="btn ghost small" style={{ marginTop: 8 }}>{t.addImages}<input type="file" accept="image/*" hidden onChange={(e) => addImages(e.target.files)} /></label>
       </div>
       <div className="field">
         <label>{t.unitsTitle}</label>

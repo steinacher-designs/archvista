@@ -75,14 +75,6 @@ function factList(d: SiteData, cls = "facts") {
   if (!d.facts.length) return "";
   return `<dl class="${cls}">${d.facts.map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(f.value)}</dd></div>`).join("")}</dl>`;
 }
-function highlights(d: SiteData, cls = "hls") {
-  if (!d.highlights.length) return "";
-  return `<ol class="${cls}">${d.highlights.map((h) => `<li><span class="hl-n">${h.n}</span><div>${h.image ? `<img src="${esc(h.image)}" alt="" loading="lazy" style="border-radius:8px;margin-bottom:10px">` : ""}<h3>${esc(h.title)}</h3>${h.text ? paras(h.text) : ""}${h.facts.length ? `<p class="hl-f">${h.facts.map(esc).join(" · ")}</p>` : ""}</div></li>`).join("")}</ol>`;
-}
-function gallery(d: SiteData, cls = "gal") {
-  if (!d.gallery.length) return "";
-  return `<div class="${cls}">${d.gallery.map((g) => `<figure><img src="${esc(g.src)}" alt="${esc(g.caption)}" loading="lazy" decoding="async">${g.caption ? `<figcaption>${esc(g.caption)}</figcaption>` : ""}</figure>`).join("")}</div>`;
-}
 function footer(d: SiteData, t: (typeof T)["de"]) {
   return `<footer class="foot"><span>© ${d.year}${d.author ? " " + esc(d.author) : ""}</span><span><a href="credits.html">${t.credits}</a> · ${t.made}</span></footer>`;
 }
@@ -111,13 +103,11 @@ section{padding:96px 0;border-top:1px solid #eee}h2{font-size:13px;letter-spacin
 @media (max-width:760px){.two{grid-template-columns:1fr;gap:24px}nav a{display:none}section{padding:64px 0}}
 `)}
 <body><a class="skip" href="#erleben">3D</a>
-<nav class="wrap"><b>${esc(d.title)}</b><span><a href="#erleben">${t.experience}</a><a href="#projekt">${t.project}</a>${d.gallery.length ? `<a href="#galerie">${t.gallery}</a>` : ""}</span></nav>
+<nav class="wrap"><b>${esc(d.title)}</b><span><a href="#erleben">${t.experience}</a><a href="#projekt">${t.project}</a></span></nav>
 <header class="wrap hero"><h1>${esc(d.title)}</h1>${d.description ? `<p>${esc(firstSentence(d.description))}</p>` : ""}<div class="cta">${actions(d, t)}</div>
 ${d.hero ? `<img class="heroimg" src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</header>
 <section id="erleben" class="wrap"><h2>${t.explore}</h2>${viewerBlock(d)}</section>
 <section id="projekt" class="wrap"><h2>${t.about}</h2><div class="two"><div>${factList(d)}<p style="color:#999;font-size:13px;margin-top:24px">${t.measured}</p></div><div class="txt">${paras(d.description)}${d.author ? `<p><small style="color:#888">${t.by}</small><br>${esc(d.author)}</p>` : ""}</div></div></section>
-${d.highlights.length ? `<section class="wrap"><h2>${t.highlights}</h2>${highlights(d)}</section>` : ""}
-${d.gallery.length ? `<section id="galerie" class="wrap"><h2>${t.gallery}</h2>${gallery(d)}</section>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 
@@ -150,8 +140,6 @@ h2{font-weight:400;font-size:clamp(30px,4vw,54px);margin:0 0 48px;line-height:1.
 <header class="hero">${d.hero ? `<img src="${esc(d.hero)}" alt="">` : ""}<div class="in"><div class="kick">${d.author ? esc(d.author) : t.project}</div><h1>${esc(d.title)}</h1>${actions(d, t)}</div></header>
 <section id="erleben"><div class="line"></div><h2>${t.explore}</h2>${viewerBlock(d)}</section>
 <section id="projekt"><div class="line"></div><h2>${t.about}</h2>${factList(d)}<div class="txt">${paras(d.description)}</div></section>
-${d.highlights.length ? `<section><div class="line"></div><h2>${t.highlights}</h2>${highlights(d)}</section>` : ""}
-${d.gallery.length ? `<section id="galerie"><div class="line"></div><h2>${t.gallery}</h2>${gallery(d)}</section>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 
@@ -183,8 +171,6 @@ header.top a{text-decoration:none;margin-left:20px}
 <div class="g hero"><h1>${esc(d.title)}</h1><div class="meta">${d.author ? `${t.by}<br><b>${esc(d.author)}</b><br>` : ""}${d.year}</div><div class="lead">${esc(firstSentence(d.description))}<div style="margin-top:20px">${actions(d, t)}</div></div>${d.hero ? `<img src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</div>
 <div id="erleben" class="g sec"><div class="num"><span>01</span></div><h2>${t.explore}</h2><div class="body">${viewerBlock(d)}</div></div>
 <div id="projekt" class="g sec"><div class="num"><span>02</span></div><h2>${t.about}</h2>${factList(d)}<div class="body cols">${paras(d.description)}</div></div>
-${d.highlights.length ? `<div class="g sec"><div class="num"><span>03</span></div><h2>${t.highlights}</h2><div class="body">${highlights(d)}</div></div>` : ""}
-${d.gallery.length ? `<div id="galerie" class="g sec"><div class="num"><span>04</span></div><h2>${t.gallery}</h2><div class="body">${gallery(d)}</div></div>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 
@@ -218,8 +204,6 @@ h2{font-size:clamp(32px,4vw,52px);letter-spacing:-.03em;margin:0 0 24px;font-wei
 <div class="wrap hero"><div class="card c1"><div><span class="tag">${d.author ? esc(d.author) : t.project} · ${d.year}</span><h1>${esc(d.title)}</h1></div><div>${actions(d, t)}</div></div><div class="card imgc">${d.hero ? `<img src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</div></div>
 <section id="erleben" class="wrap"><div class="card"><h2>${t.explore}</h2>${viewerBlock(d)}</div></section>
 <section id="projekt" class="wrap grid2"><div class="card"><h2>${t.about}</h2>${paras(d.description)}</div><div class="card"><h2>${t.facts}</h2>${factList(d)}<p style="color:#6b6780;font-size:13px">${t.measured}</p></div></section>
-${d.highlights.length ? `<section class="wrap"><h2 style="padding:0 8px">${t.highlights}</h2>${highlights(d)}</section>` : ""}
-${d.gallery.length ? `<section id="galerie" class="wrap"><h2 style="padding:0 8px">${t.gallery}</h2>${gallery(d)}</section>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 
@@ -248,12 +232,10 @@ h2{font-weight:400;font-style:italic;font-size:clamp(34px,4vw,56px);text-align:c
 @media (max-width:820px){.two{grid-template-columns:1fr;gap:32px}.gal figure:nth-child(odd){margin-top:0}}
 `)}
 <body>
-<nav><a href="#erleben">${t.experience}</a><a href="#projekt">${t.project}</a>${d.gallery.length ? `<a href="#galerie">${t.gallery}</a>` : ""}</nav>
+<nav><a href="#erleben">${t.experience}</a><a href="#projekt">${t.project}</a></nav>
 <header class="wrap hero"><div class="k">${d.author ? esc(d.author) : t.project}</div><h1>${esc(d.title)}</h1>${actions(d, t)}${d.hero ? `<img src="${esc(d.hero)}" alt="${esc(d.title)}">` : ""}</header>
 <section id="erleben" class="wrap">${LEAF}<h2>${t.explore}</h2>${viewerBlock(d)}</section>
 <section id="projekt" class="wrap">${LEAF}<h2>${t.about}</h2><div class="two"><div>${paras(d.description)}</div><div>${factList(d)}<p style="font:13px Inter,system-ui,sans-serif;color:#8a836b">${t.measured}</p></div></div></section>
-${d.highlights.length ? `<section class="wrap">${LEAF}<h2>${t.highlights}</h2>${highlights(d)}</section>` : ""}
-${d.gallery.length ? `<section id="galerie" class="wrap">${LEAF}<h2>${t.gallery}</h2>${gallery(d)}</section>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 const LEAF = `<svg class="leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M5 19C5 10 11 4 20 4c0 9-6 15-15 15Z"/><path d="M5 19 14 10"/></svg>`;
@@ -284,8 +266,6 @@ h2 em{color:var(--accent);font-style:normal}
 <body>
 <div class="stage bars" id="erleben">${viewerBlock(d, { cinematic: true })}<div class="title"><div class="k">${d.author ? esc(d.author) : t.project}</div><h1>${esc(d.title)}</h1><div class="cta">${actions(d, t)}</div></div><div class="scroll">${t.scroll} ↓</div></div>
 <section id="projekt"><h2>${t.about.split(" ").slice(0, -1).join(" ")} <em>${t.about.split(" ").slice(-1)[0]}</em></h2>${factList(d)}<div class="txt">${paras(d.description)}</div></section>
-${d.highlights.length ? `<section><h2>${t.highlights}</h2>${highlights(d)}</section>` : ""}
-${d.gallery.length ? `<section id="galerie"><h2>${t.gallery}</h2>${gallery(d)}</section>` : ""}
 ${footer(d, t)}${scripts()}</body></html>`;
 }
 

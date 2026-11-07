@@ -47,6 +47,20 @@ describe("website generator", () => {
     }
   });
 
+  it("has no highlights or gallery section; only one title image is shipped", async () => {
+    const renders = ["a", "b", "c"].map((id) => ({ id, caption: id, data: new Uint8Array([1, 2, 3]) }));
+    for (const t of TEMPLATES) {
+      const project = newProject("house_mm.dxf", "abc");
+      project.template = t.id; project.hotspots = scene.hotspotSuggestions; project.viewpoints = scene.viewpoints;
+      const pub = buildPublicScene(scene, project);
+      const files = await generateSite({ project, scene, pub, runtime, readAsset, renders });
+      const h = html(files);
+      expect(h).not.toMatch(/Highlights|Galerie|id="galerie"|class="hls"|class="gal"/);
+      expect([...files.keys()].filter((k) => k.startsWith("images/"))).toEqual(["images/a.jpg"]);
+      if (t.id !== "cinema" && t.id !== "swiss") expect(h).toContain('src="images/a.jpg"');
+    }
+  });
+
   it("escapes user text", async () => {
     const { files } = await site((p) => { p.title = '<script>alert(1)</script>"'; });
     expect(html(files)).not.toContain("<script>alert(1)</script>");

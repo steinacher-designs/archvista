@@ -64,9 +64,10 @@ export function siteData(input: SiteInput): SiteData {
   facts.push({ label: L === "de" ? "Abmessungen" : "Dimensions", value: `${fmt(size[0])} × ${fmt(size[1])} m` });
   facts.push({ label: L === "de" ? "Höhe" : "Height", value: `${fmt(size[2])} m` });
   const renders = input.renders ?? [];
+  // title image: the user's own first image if there is one, otherwise the rendered main view
   const gallery = [
-    ...renders.map((r) => ({ src: `images/${r.id}.jpg`, caption: r.caption })),
-    ...p.images.map((im, i) => ({ src: `images/user-${i + 1}${extOf(im.dataUrl)}`, caption: im.caption ?? "" })),
+    ...p.images.slice(0, 1).map((im) => ({ src: `images/user-1${extOf(im.dataUrl)}`, caption: im.caption ?? "" })),
+    ...renders.slice(0, 1).map((r) => ({ src: `images/${r.id}.jpg`, caption: r.caption })),
   ];
   return {
     lang: L,
@@ -77,7 +78,7 @@ export function siteData(input: SiteInput): SiteData {
     year: new Date(p.updatedAt).getFullYear(),
     facts,
     highlights: pub.config.hotspots.map((h, i) => ({ n: i + 1, title: h.title, text: h.text, image: h.image, facts: [...(h.facts ?? []), ...(h.materialSpec ? [h.materialSpec] : [])] })),
-    gallery,
+    gallery: [],
     hero: gallery[0]?.src ?? null,
     levels: pub.config.levels.map((l) => (L === "de" ? l.name.de : l.name.en)),
     hasTour: pub.config.tour && pub.config.viewpoints.length > 1,
@@ -135,9 +136,9 @@ export async function generateSite(input: SiteInput): Promise<FileMap> {
     if (inSite) used[k] = v;
   }
   // images
-  for (const r of input.renders ?? []) files.set(`images/${r.id}.jpg`, r.data);
+  if (!p.images.length) for (const r of (input.renders ?? []).slice(0, 1)) files.set(`images/${r.id}.jpg`, r.data);
   for (const [k, v] of hsImages) files.set(k, v);
-  p.images.forEach((im, i) => { const b = dataUrlBytes(im.dataUrl); if (b) files.set(`images/user-${i + 1}${extOf(im.dataUrl)}`, b); });
+  p.images.slice(0, 1).forEach((im) => { const b = dataUrlBytes(im.dataUrl); if (b) files.set(`images/user-1${extOf(im.dataUrl)}`, b); });
   files.set("credits.html", enc.encode(credits(p, used)));
   return files;
 }

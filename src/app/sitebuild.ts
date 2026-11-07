@@ -12,10 +12,11 @@ export async function buildSiteFiles(project: Project, scene: PreparedScene, onP
   const t0 = performance.now();
   onProgress?.(0.05, "3D-Modell wird vorbereitet");
   const pub = buildPublicScene(scene, project);
-  onProgress?.(0.25, "Bilder werden gerendert");
+  onProgress?.(0.25, "Titelbild wird gerendert");
   const renders: { id: string; caption: string; data: Uint8Array }[] = [];
   const viewer = getViewer();
-  const shots = pickGalleryViews(pub.config.viewpoints);
+  // only the title image is rendered (no gallery); skipped when the user supplied an own image
+  const shots = project.images.length ? [] : pickGalleryViews(pub.config.viewpoints).slice(0, 1);
   if (viewer) {
     await viewer.assetsSettled(20000);
     for (let i = 0; i < shots.length; i++) {
@@ -29,7 +30,7 @@ export async function buildSiteFiles(project: Project, scene: PreparedScene, onP
         renderCache.set(key, data);
       }
       renders.push({ id: `view-${vp.id}`, caption: vp.name, data });
-      onProgress?.(0.25 + 0.45 * ((i + 1) / shots.length), "Bilder werden gerendert");
+      onProgress?.(0.25 + 0.45 * ((i + 1) / shots.length), "Titelbild wird gerendert");
     }
   }
   onProgress?.(0.75, "Website-Dateien werden geschrieben");
