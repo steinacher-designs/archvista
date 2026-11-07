@@ -16,7 +16,7 @@
 | Gesperrte / ausgeblendete Bereiche | ✅ | Ausgeblendetes wird geometrisch entfernt (Test prüft GLB) |
 | Infopunkte, Blickpunkte, Rundgang | ✅ | |
 | 6 Website-Designs, relative Pfade, Galerie | ✅ | |
-| GitHub-Veröffentlichung (Geräte-Anmeldung, inkrementell, Pages, Live-Prüfung) | ✅ gegen simulierte GitHub-API | Echtlauf benötigt Konto + OAuth-App |
+| GitHub-Veröffentlichung (Geräte-Anmeldung, inkrementell, Pages, Live-Prüfung) | ✅ simuliert · 🟡 echt | OAuth-App „ARCHVISTA“ (Device Flow) registriert; echte Testseite https://steinacher-designs.github.io/archvista-test/ nach 30 s online, alle Dateien korrekt unter Unterpfad, Desktop + Handy ohne Fehler. Der Veröffentlichen-Knopf selbst wird im Abschlusstest auf Windows geprüft. |
 | Offline-Export | ✅ | |
-| Windows-Installer (NSIS .exe + MSI) | 🟡 | Build über GitHub Actions (Windows); Echtlauf benötigt Repository |
+| Windows-Installer (NSIS .exe + MSI) | ✅ gebaut | GitHub Actions (windows-latest): ARCHVISTA_1.0.0_x64-setup.exe (50 MB), MSI de-DE / en-US |
 | Abnahme auf sauberem Windows-System | ⏳ | nach erstem Installer-Build |
