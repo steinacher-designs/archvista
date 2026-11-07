@@ -489,6 +489,11 @@ export class ArchViewer {
     this.applyTier(q === "auto" ? this.autoTier() : q);
   }
 
+  /** True when the browser draws with the CPU (no working graphics driver): Microsoft Basic Render Driver / WARP, SwiftShader, llvmpipe. */
+  get softwareRendering(): boolean {
+    return /basic render driver|warp|swiftshader|llvmpipe|softpipe|software/i.test(this.gpuName());
+  }
+
   private autoTier(): Tier {
     const coarse = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
     if (coarse) return "performance";
@@ -497,7 +502,7 @@ export class ArchViewer {
       const gl = this.renderer.getContext();
       const ext = gl.getExtension("WEBGL_debug_renderer_info");
       const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
-      if (/intel|uhd|iris|radeon\(tm\) graphics|radeon graphics|vega \d|adreno|mali|apple m\d|swiftshader|llvmpipe/i.test(name)) return "performance";
+      if (/intel|uhd|iris|radeon\(tm\) graphics|radeon graphics|vega \d|adreno|mali|apple m\d|swiftshader|llvmpipe|basic render driver|warp/i.test(name)) return "performance";
     } catch { /* unknown → balanced */ }
     return "balanced";
   }
@@ -515,8 +520,11 @@ export class ArchViewer {
     this.invalidate(8);
     this.tier = t;
     const dpr = typeof devicePixelRatio === "number" ? devicePixelRatio : 1;
-    this.renderer.setPixelRatio(t === "ultra" ? Math.min(dpr, 2) : t === "balanced" ? Math.min(dpr, 1.25) : Math.min(dpr, 1));
-    const size = t === "ultra" ? 4096 : t === "balanced" ? 2048 : 1024;
+    const soft = t === "performance" && this.softwareRendering;
+    // without a graphics driver every pixel is computed by the CPU: render fewer of them and cap the frame rate
+    this.renderer.setPixelRatio(soft ? 0.8 : t === "ultra" ? Math.min(dpr, 2) : t === "balanced" ? Math.min(dpr, 1.25) : Math.min(dpr, 1));
+    if (soft && this.maxFps === 0) this.maxFps = 30;
+    const size = soft ? 512 : t === "ultra" ? 4096 : t === "balanced" ? 2048 : 1024;
     if (this.sun.shadow.mapSize.x !== size) {
       this.sun.shadow.mapSize.set(size, size);
       this.sun.shadow.map?.dispose();
@@ -558,7 +566,7 @@ export class ArchViewer {
     if (this.cinematic || this.tier === "ultra") composer.addPass(new UnrealBloomPass(new Vector2(w, h), this.cinematic ? 0.35 : 0.18, 0.6, 0.92));
     composer.addPass(new OutputPass());
     if (this.cinematic) composer.addPass(new ShaderPass(VIGNETTE));
-    if (this.tier === "performance") composer.addPass(new SMAAPass());
+    if (this.tier === "performance" && !this.softwareRendering) composer.addPass(new SMAAPass());
     this.composer = composer;
   }
 
@@ -901,7 +909,7 @@ export class ArchViewer {
     const fps = 1 / sorted[Math.floor(sorted.length / 2)]; // median: robust against single hitches
     this.opts.onStatus?.({ tier: this.tier, fps });
     if (fps < 40 && this.tier !== "performance") { this.applyTier(this.tier === "ultra" ? "balanced" : "performance"); return; } // keep measuring
-    if (fps > 57 && this.tier !== "ultra" && this.stepUps < 1 && !isCoarse()) { this.stepUps++; this.applyTier(this.tier === "performance" ? "balanced" : "ultra"); return; }
+    if (fps > 57 && this.tier !== "ultra" && this.stepUps < 1 && !isCoarse() && !this.softwareRendering) { this.stepUps++; this.applyTier(this.tier === "performance" ? "balanced" : "ultra"); return; }
     this.adaptiveDone = true;
   }
 

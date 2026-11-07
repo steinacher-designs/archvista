@@ -45,13 +45,14 @@ export function PublishPanel() {
       const code = await startDeviceFlow(platform.fetch, id);
       setDc(code);
       await navigator.clipboard?.writeText(code.user_code).catch(() => {});
-      await platform.openExternal(code.verification_uri);
+      // if the browser can't be opened, the code and the link button stay on screen
+      await platform.openExternal(code.verification_uri).catch(() => {});
       cancel.current = { cancelled: false };
       const tok = await pollDeviceToken(platform.fetch, id, code, undefined, cancel.current);
       await platform.secret.set(TOKEN, tok);
       const u = await new GitHub(platform.fetch, tok).user();
       setToken(tok); setLogin(u.login); setDc(null);
-    } catch (e) { setDc(null); setErr((e as Error).message); }
+    } catch (e) { setDc(null); setErr(errText(e)); }
   };
   const disconnect = async () => { await platform.secret.remove(TOKEN); setToken(null); setLogin(null); };
 
@@ -71,7 +72,7 @@ export function PublishPanel() {
       update((p) => { p.publish = { ...p.publish, owner: r.owner, repo: r.repo, url: r.url, lastUploadAt: new Date().toISOString(), ...(r.status === "live" ? { lastLiveAt: new Date().toISOString() } : {}) }; });
       void platform.appendBenchmark({ at: new Date().toISOString(), file: project!.fileName, ...useStore.getState().timings, totalSinceImport: performance.now() - startedAt, status: r.status });
     } catch (e) {
-      setErr(e instanceof PublishError ? e.message : `${(e as Error).message}`);
+      setErr(errText(e));
       if (e instanceof PublishError && e.code === "auth") await disconnect();
     } finally { setBusy(false); }
   };
@@ -83,7 +84,7 @@ export function PublishPanel() {
       addTiming("site", ms);
       const where = await platform.exportSite(files, slugify(project!.title), (f) => setProg({ stage: "upload", message: lang === "de" ? "Dateien werden gespeichert" : "Saving files", fraction: f }));
       if (where) setExported(where);
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); setProg(null); }
+    } catch (e) { setErr(errText(e)); } finally { setBusy(false); setProg(null); }
   };
 
   const total = Object.values(timings).reduce((a, b) => a + b, 0);
@@ -161,3 +162,9 @@ export function PublishPanel() {
 }
 
 const fmt = (ms?: number) => (ms === undefined ? "–" : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
+
+/** Tauri rejects with plain strings, fetch with Errors: always produce readable text. */
+function errText(e: unknown): string {
+  const m = e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e);
+  return m && m !== "{}" ? m : "Unbekannter Fehler – bitte noch einmal versuchen.";
+}

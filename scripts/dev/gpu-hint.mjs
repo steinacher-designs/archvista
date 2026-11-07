@@ -1,0 +1,14 @@
+import { chromium } from "playwright"; import http from "node:http"; import { readFile } from "node:fs/promises"; import path from "node:path";
+const [dist, dxf, out] = process.argv.slice(2);
+const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
+const srv = http.createServer(async (q, r) => { let f = decodeURIComponent(q.url.split("?")[0]); if (f === "/") f = "/index.html"; try { const b = await readFile(path.join(dist, f)); r.writeHead(200, { "content-type": types[path.extname(f)] ?? "application/octet-stream" }); r.end(b); } catch { r.writeHead(404); r.end(); } }).listen(0);
+const b = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
+await p.goto(`http://localhost:${srv.address().port}/`);
+await p.getByTestId("file").setInputFiles(dxf);
+await p.getByTestId("viewer").waitFor({ timeout: 120000 });
+await p.getByTestId("gpu-hint").waitFor({ timeout: 20000 });
+const info = await p.evaluate(() => { const c = document.querySelector("[data-testid=viewer] canvas"); return { w: c.width, cssW: c.clientWidth }; });
+console.log("hint shown; canvas", JSON.stringify(info));
+await p.screenshot({ path: out, timeout: 180000 });
+await b.close(); srv.close();

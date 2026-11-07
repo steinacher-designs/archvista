@@ -21,7 +21,7 @@ export function useViewer(host: React.RefObject<HTMLDivElement | null>, scene: P
       language: opts.lang, assetBase: "/assets-lib/", preserveDrawingBuffer: true,
       onHotspot: (h) => hsRef.current?.(h),
     });
-    v.maxFps = Number(localStorage.getItem("av-maxfps") ?? 0);
+    const cap = localStorage.getItem("av-maxfps"); if (cap !== null) v.maxFps = Number(cap);
     viewer.current = v; current = v;
     return () => { v.dispose(); viewer.current = null; current = null; };
   }, [host]);

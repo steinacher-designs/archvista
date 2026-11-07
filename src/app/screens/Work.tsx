@@ -79,6 +79,7 @@ export function Work() {
         {step === "preview" && previewMode !== "3d" && <PreviewStage mode={previewMode} />}
         {placing && <div className="pickhint">{t.placeHotspot}<button className="btn small ghost" style={{ color: "#fff" }} onClick={() => setPlacing(false)}>{t.cancel}</button></div>}
         {step === "customize" && model.warnings.length > 0 && !placing && <ModelNotes />}
+        <GpuNotice />
       </main>
       <aside className="side">
         {step === "customize" && <CustomizePanel onPlaceHotspot={() => setPlacing(true)} selectedHotspot={selectedHs} onSelectHotspot={setSelectedHs} />}
@@ -102,6 +103,30 @@ function ModelNotes() {
     <div className="chip">
       <button className="link" onClick={() => setOpen(!open)}>⚠ {t.issues} ({w.length})</button>
       {open && <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>{w.map((x, i) => <li key={i}>{x.message}</li>)}</ul>}
+    </div>
+  );
+}
+
+/** Shown when Windows has no working graphics driver and the CPU draws everything (very slow). */
+function GpuNotice() {
+  const { lang } = useStore();
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => {
+      try { if (sessionStorage.getItem("av-gpu-hint") === "off") return; } catch { /* ignore */ }
+      if (getViewer()?.softwareRendering) setShow(true);
+    }, 1500);
+    return () => clearTimeout(id);
+  }, []);
+  if (!show) return null;
+  const close = () => { setShow(false); try { sessionStorage.setItem("av-gpu-hint", "off"); } catch { /* ignore */ } };
+  return (
+    <div className="gpu-hint" role="status" data-testid="gpu-hint">
+      <b>{lang === "de" ? "Kein Grafiktreiber aktiv – deshalb ruckelt es" : "No graphics driver active – that's why it stutters"}</b>
+      <p>{lang === "de"
+        ? "Windows zeichnet gerade alles mit dem Prozessor („Microsoft Basic Render Driver“). ARCHVISTA läuft deshalb im Sparmodus. Abhilfe: Geräte-Manager → Grafikkarten → Treiber aktualisieren (oder Lenovo Vantage / Windows Update → Optionale Updates), danach neu starten."
+        : "Windows is drawing everything on the processor (\u201cMicrosoft Basic Render Driver\u201d), so ARCHVISTA runs in power-saving mode. Fix: Device Manager → Display adapters → Update driver (or Windows Update → Optional updates), then restart."}</p>
+      <button className="btn small ghost" onClick={close}>{lang === "de" ? "Verstanden" : "Got it"}</button>
     </div>
   );
 }

@@ -8,13 +8,12 @@
   "permissions": [
     "core:default",
     "dialog:allow-open",
-    "opener:allow-open-url",
-    "opener:allow-reveal-item-in-dir",
+    "opener:default",
     {
       "identifier": "http:default",
       "allow": [
         {
-          "url": "https://github.com/login/*"
+          "url": "https://github.com/*"
         },
         {
           "url": "https://api.github.com/*"
