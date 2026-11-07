@@ -4,6 +4,7 @@ import { Home, Processing, Failed } from "./screens/Home";
 import { Work } from "./screens/Work";
 import { platform } from "./platform";
 import { UpdateBanner } from "./Updater";
+import { getViewer } from "./useViewer";
 
 export function App() {
   const { screen, t, lang, setLang, project, past, future, undo, redo, saving, goHome, resetAuto } = useStore();
@@ -65,6 +66,7 @@ function Settings({ onClose }: { onClose(): void }) {
         <h2 style={{ marginTop: 0 }}>{t.settings}</h2>
         <div className="field"><label>{t.clientId}</label><input className="input" value={id} onChange={(e) => setId(e.target.value.trim())} placeholder="Ov23li…" /><small>{t.clientIdHint}</small></div>
         <p className="note">{lang === "de" ? "ARCHVISTA ist kostenlos und benötigt kein Konto. GitHub wird nur zum Veröffentlichen verwendet. Zugangsdaten liegen in der Windows-Anmeldeinformationsverwaltung." : "ARCHVISTA is free and needs no account. GitHub is only used for publishing. Credentials are stored in Windows Credential Manager."}</p>
+        <p style={{ fontSize: 12.5, color: "var(--ink3)" }}>{lang === "de" ? "Grafikchip" : "Graphics"}: {getViewer()?.gpuName() ?? "–"}</p>
         <p style={{ fontSize: 12.5, color: "var(--ink3)" }}>ARCHVISTA {__APP_VERSION__} · © 2026 Judith Steinacher<br />three.js (MIT) · Poly Haven & ambientCG (CC0)</p>
         <button className="btn wide" onClick={() => { if (id) localStorage.setItem("av-gh-client", id); else localStorage.removeItem("av-gh-client"); onClose(); }}>OK</button>
       </div>

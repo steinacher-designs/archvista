@@ -1,0 +1,26 @@
+// Measures how many frames the viewer draws while idle, while moving and after scene changes.
+import { chromium } from "playwright"; import http from "node:http"; import { readFile } from "node:fs/promises"; import path from "node:path";
+const dir = process.argv[2];
+const T = { ".js": "text/javascript", ".html": "text/html", ".json": "application/json", ".webp": "image/webp" };
+const srv = http.createServer(async (q, r) => { try { let f = decodeURIComponent(q.url.split("?")[0]); if (f.endsWith("/")) f += "index.html"; r.writeHead(200, { "content-type": T[path.extname(f)] ?? "application/octet-stream" }); r.end(await readFile(path.join(dir, f))); } catch { r.writeHead(404); r.end(); } }).listen(0);
+const b = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const p = await b.newPage({ viewport: { width: 640, height: 400 } });
+p.on("pageerror", (e) => console.log("PAGEERROR", e.message));
+await p.goto(`http://localhost:${srv.address().port}/`);
+await p.waitForFunction(() => window.archvista, null, { timeout: 120000 });
+await p.evaluate(() => window.archvista.assetsSettled());
+const frames = () => p.evaluate(() => window.archvista.framesDrawn);
+const during = async (label, fn) => { const a = await frames(); await fn(); console.log(label.padEnd(36), (await frames()) - a, "frames"); };
+await p.waitForTimeout(3000);
+await during("idle, 5 s", () => p.waitForTimeout(5000));
+await during("dragging the view, ~2 s", async () => { await p.mouse.move(320, 200); await p.mouse.down(); for (let i = 0; i < 20; i++) { await p.mouse.move(320 + i * 8, 200); await p.waitForTimeout(100); } await p.mouse.up(); });
+await p.waitForTimeout(3000);
+await during("idle again, 5 s", () => p.waitForTimeout(5000));
+await during("switch environment (+6 s)", async () => { await p.evaluate(() => window.archvista.setEnvironment("urban")); await p.waitForTimeout(6000); });
+await during("idle after switch, 5 s", () => p.waitForTimeout(5000));
+await during("walk mode, holding W 2 s", async () => { await p.evaluate(() => window.archvista.startWalk(true)); await p.keyboard.down("KeyW"); await p.waitForTimeout(2000); await p.keyboard.up("KeyW"); });
+await p.waitForTimeout(3000);
+await during("walk mode idle, 5 s", () => p.waitForTimeout(5000));
+await during("walk again, holding W 2 s", async () => { await p.keyboard.down("KeyW"); await p.waitForTimeout(2000); await p.keyboard.up("KeyW"); });
+console.log("quality tier chosen:", await p.evaluate(() => window.archvista.tier));
+await b.close(); srv.close();

@@ -42,6 +42,9 @@ export function Work() {
     return () => clearTimeout(id);
   }, [project?.id, project?.environment]);
 
+  // no 3D rendering while the website preview covers the view (saves the graphics card)
+  useEffect(() => { const v = getViewer(); if (v) v.paused = step === "preview" && previewMode !== "3d"; }, [step, previewMode]);
+
   // one-click mode: go straight to publishing
   useEffect(() => { if (s.autoMode && step === "customize" && !s.past.length) setStep("publish"); }, []);
 

@@ -1,6 +1,6 @@
 [package]
 name = "archvista"
-version = "1.1.0"
+version = "1.1.1"
 description = "ARCHVISTA – 3D-DXF zu interaktiver Architektur-Website"
 authors = ["Judith Steinacher"]
 license = "MIT"

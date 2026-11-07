@@ -29,3 +29,11 @@
 | Eigene Orte in der Sprungliste, Geschosse umbenennen/ausblenden | ✅ | Orte in ausgeblendeten/gesperrten Bereichen werden nicht veröffentlicht |
 | Pläne & Unterlagen (PDF, DWG, beliebige Dateien, ganze Ordner) | ✅ | einzelne Dateien bis 95 MB (GitHub-Grenze) |
 | Download-Seite + fester Download-Link | ✅ | Windows SmartScreen-Hinweis bei unsignierter .exe (Code-Signing-Zertifikat kostet Geld) |
+
+## Version 1.1.1 – Leistung
+| Bereich | Status | Anmerkung |
+|---|---|---|
+| Zeichnen nur bei Bewegung / Änderung | ✅ gemessen | Ruhe: 0 Bilder in 5 s (vorher ~300); Ziehen/Gehen: flüssig |
+| Automatische Qualität | ✅ gemessen | startet auf integrierter Grafik mit „Leistung“; stottert es (5 Bilder < 12 fps), sofort eine Stufe tiefer |
+| Leistungsstarke Grafikkarte bevorzugen | 🟡 | WebView2-Option `--force_high_performance_gpu`; Wirkung hängt vom Laptop ab |
+| 3D-Ansicht pausiert während der Website-Vorschau | ✅ | |

@@ -82,12 +82,22 @@ export class ArchViewer {
   private camAnim: { from: [Vector3, Vector3]; to: [Vector3, Vector3]; t: number; dur: number } | null = null;
   private frameTimes: number[] = [];
   private adaptiveDone = false;
+  /** On-demand rendering: frames still to draw although nothing moves (scene/material/asset changes). */
+  private dirty = 5;
+  private lastCam = new Float64Array(16);
+  private lastRenderAt = 0;
+  private stepUps = 0;
+  private wasLoading = false;
+  /** Number of frames drawn so far (diagnostics). */
+  framesDrawn = 0;
   private lastOrbitPos = new Vector3();
   private bvhForPick: MeshBVH | null = null;
   private mats = new Map<string, Material>();
   mode: Mode = "orbit";
-  /** When true the loop stops rendering (used for deterministic stills / tests). */
-  paused = false;
+  /** When true the loop stops rendering (hidden view, stills, tests). */
+  private _paused = false;
+  get paused() { return this._paused; }
+  set paused(v: boolean) { this._paused = v; if (!v) this.invalidate(5); }
   /** Optional frame cap (tests on software renderers, battery saving). 0 = unlimited. */
   maxFps = 0;
   private lastFrame = 0;
@@ -124,6 +134,7 @@ export class ArchViewer {
     this.sun.castShadow = true;
     this.orbit = new OrbitControls(this.camera, cv);
     this.orbit.enableDamping = true;
+    this.orbit.addEventListener("change", () => this.invalidate(2));
     this.orbit.maxPolarAngle = Math.PI * 0.495;
     this.bindInput();
     this.resizeObs = new ResizeObserver(() => this.resize());
@@ -155,6 +166,7 @@ export class ArchViewer {
 
   /** Replace the building (used directly by the desktop app for instant previews). */
   setBuilding(parts: BuildingPart[], config: PublicConfig) {
+    this.invalidate(8);
     this.config = config;
     disposeGroup(this.building);
     this.building.clear();
@@ -237,6 +249,7 @@ export class ArchViewer {
 
   /** Replace material assignment live (desktop editor). */
   setPresetFor(meshPreset: string, pr: MaterialPreset) {
+    this.invalidate(8);
     this.mats.delete(meshPreset);
     const m = this.material(meshPreset, pr);
     this.building.traverse((o) => { const me = o as Mesh; if (me.isMesh && me.userData.presetId === meshPreset) me.material = m; });
@@ -265,6 +278,7 @@ export class ArchViewer {
   }
 
   setBarriers(barriers: PublicConfig["barriers"]) {
+    this.invalidate(8);
     if (!this.config) return;
     this.config = { ...this.config, barriers };
     this.rebuildCollider();
@@ -294,6 +308,7 @@ export class ArchViewer {
   }
 
   private applyEnvironment(id: EnvironmentId) {
+    this.invalidate(8);
     const cfg = this.config!;
     if (this.envGroup) { this.scene.remove(this.envGroup); disposeGroup(this.envGroup); }
     const b = cfg.bbox;
@@ -433,6 +448,7 @@ export class ArchViewer {
 
   /** Warm interior lights for evening scenes (rooms from the analysis, never in restricted areas). */
   private setRoomLights(on: boolean) {
+    this.invalidate(8);
     for (const l of this.roomLights) { this.scene.remove(l); l.dispose(); }
     this.roomLights = [];
     const glass = this.mats.get("glass") as MeshPhysicalMaterial | undefined;
@@ -475,13 +491,31 @@ export class ArchViewer {
 
   private autoTier(): Tier {
     const coarse = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
-    return coarse ? "performance" : "balanced";
+    if (coarse) return "performance";
+    // laptops with integrated graphics start light; the measurement can still step up
+    try {
+      const gl = this.renderer.getContext();
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+      if (/intel|uhd|iris|radeon\(tm\) graphics|radeon graphics|vega \d|adreno|mali|apple m\d|swiftshader|llvmpipe/i.test(name)) return "performance";
+    } catch { /* unknown → balanced */ }
+    return "balanced";
+  }
+
+  /** Graphics chip as reported by the browser (shown in settings, helps support). */
+  gpuName(): string {
+    try {
+      const gl = this.renderer.getContext();
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    } catch { return "unbekannt"; }
   }
 
   private applyTier(t: Tier) {
+    this.invalidate(8);
     this.tier = t;
     const dpr = typeof devicePixelRatio === "number" ? devicePixelRatio : 1;
-    this.renderer.setPixelRatio(t === "ultra" ? Math.min(dpr, 2) : t === "balanced" ? Math.min(dpr, 1.5) : 1);
+    this.renderer.setPixelRatio(t === "ultra" ? Math.min(dpr, 2) : t === "balanced" ? Math.min(dpr, 1.25) : Math.min(dpr, 1));
     const size = t === "ultra" ? 4096 : t === "balanced" ? 2048 : 1024;
     if (this.sun.shadow.mapSize.x !== size) {
       this.sun.shadow.mapSize.set(size, size);
@@ -529,6 +563,7 @@ export class ArchViewer {
   }
 
   private resize() {
+    this.invalidate(8);
     const w = this.container.clientWidth || 800, h = this.container.clientHeight || 600;
     this.renderer.setSize(w, h, false);
     this.renderer.domElement.style.width = "100%";
@@ -593,6 +628,7 @@ export class ArchViewer {
   }
 
   clipLevel(y: number | null) {
+    this.invalidate(8);
     this.clipPlane.constant = y === null ? 1e6 : y;
   }
 
@@ -631,6 +667,7 @@ export class ArchViewer {
 
   // ——— hotspots ———
   setHotspots(list: Hotspot[]) {
+    this.invalidate(8);
     this.hotspots = list;
     for (const el of this.hsEls.values()) el.remove();
     this.hsEls.clear();
@@ -717,6 +754,7 @@ export class ArchViewer {
       if (this.mode !== "walk" || !this.walker || document.pointerLockElement !== cv) return;
       this.walker.yaw -= e.movementX * 0.0022;
       this.walker.pitch = Math.max(-1.45, Math.min(1.45, this.walker.pitch - e.movementY * 0.0022));
+      this.invalidate(1);
     });
     // touch: left half = joystick, right half = look
     let joy: { id: number; x: number; y: number } | null = null, look: { id: number; x: number; y: number } | null = null;
@@ -799,10 +837,32 @@ export class ArchViewer {
       if (this.insideBarrier(this.camera.position) || this.camera.position.y < this.config.groundY + 0.3) this.camera.position.copy(this.lastOrbitPos);
       else this.lastOrbitPos.copy(this.camera.position);
     }
+    // draw only when something changed: camera moved, animation running, assets arriving or scene edited
+    this.camera.updateMatrixWorld();
+    const m = this.camera.matrixWorld.elements;
+    let moved = false;
+    for (let i = 0; i < 16; i++) if (Math.abs(m[i] - this.lastCam[i]) > 1e-6) { moved = true; break; }
+    const loading = this.lib.pending() > 0;
+    if (loading) this.dirty = Math.max(this.dirty, 2);
+    else if (this.wasLoading) this.dirty = Math.max(this.dirty, 12);
+    this.wasLoading = loading;
+    if (!moved && this.dirty <= 0 && !this.camAnim && !this.tour && !this.envRes?.update) return;
+    if (this.dirty > 0) this.dirty--;
+    this.lastCam.set(m);
+    const now = performance.now();
+    const interval = this.lastRenderAt ? now - this.lastRenderAt : 0;
+    this.lastRenderAt = now;
     this.updateHotspots();
     this.composer.render(dt);
-    this.adapt(dt);
+    this.framesDrawn++;
+    // only continuous movement says something about the frame rate
+    // (consecutive frames of a movement; longer gaps are pauses between interactions)
+    if (moved && this.movedLast && interval > 0 && interval < 1500) this.adapt(interval / 1000);
+    this.movedLast = moved;
   };
+
+  /** Ask for a few more frames (after scene, material or environment changes). */
+  invalidate(frames = 3) { this.dirty = Math.max(this.dirty, frames); }
 
   private runTour(dt: number) {
     const tour = this.tour;
@@ -821,16 +881,27 @@ export class ArchViewer {
     }
   }
 
+  private slowStreak = 0;
+  private movedLast = false;
+
   private adapt(dt: number) {
-    if (this.adaptiveDone || this.quality !== "auto") return;
+    if (this.quality !== "auto") return;
+    // emergency brake: clearly stuttering (under ~12 fps) for 5 frames → step down at once, never step up again
+    if (dt > 0.085) this.slowStreak++; else this.slowStreak = 0;
+    if (this.slowStreak >= 5 && this.tier !== "performance") {
+      this.slowStreak = 0; this.stepUps = 99; this.frameTimes = [];
+      this.applyTier(this.tier === "ultra" ? "balanced" : "performance");
+      return;
+    }
+    if (this.adaptiveDone || dt > 0.25) return;
     this.frameTimes.push(dt);
-    if (this.frameTimes.length < 150) return;
-    const avg = this.frameTimes.slice(30).reduce((a, b) => a + b, 0) / (this.frameTimes.length - 30);
+    if (this.frameTimes.length < 45) return;
+    const sorted = [...this.frameTimes].sort((a, b) => a - b);
     this.frameTimes = [];
-    const fps = 1 / avg;
+    const fps = 1 / sorted[Math.floor(sorted.length / 2)]; // median: robust against single hitches
     this.opts.onStatus?.({ tier: this.tier, fps });
-    if (fps < 30 && this.tier !== "performance") this.applyTier(this.tier === "ultra" ? "balanced" : "performance");
-    else if (fps > 58 && this.tier === "balanced" && !isCoarse()) { this.applyTier("ultra"); return; }
+    if (fps < 40 && this.tier !== "performance") { this.applyTier(this.tier === "ultra" ? "balanced" : "performance"); return; } // keep measuring
+    if (fps > 57 && this.tier !== "ultra" && this.stepUps < 1 && !isCoarse()) { this.stepUps++; this.applyTier(this.tier === "performance" ? "balanced" : "ultra"); return; }
     this.adaptiveDone = true;
   }
 
@@ -961,6 +1032,7 @@ export class ArchViewer {
   }
 
   setPlaces(places: PublicConfig["places"], levels?: PublicConfig["levels"]) {
+    this.invalidate(8);
     if (!this.config) return;
     this.config = { ...this.config, places, ...(levels ? { levels } : {}) };
     if (this.hudEl) this.buildHud();
