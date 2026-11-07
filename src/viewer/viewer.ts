@@ -766,33 +766,27 @@ export class ArchViewer {
       this.walker.pitch = Math.max(-1.45, Math.min(1.45, this.walker.pitch - e.movementY * 0.0022));
       this.invalidate(1);
     });
-    // touch: left half = joystick, right half = look
-    let joy: { id: number; x: number; y: number } | null = null, look: { id: number; x: number; y: number } | null = null;
+    // touch: the visible joystick (bottom left) walks; dragging anywhere on the picture looks around
+    let look: { id: number; x: number; y: number } | null = null;
     cv.addEventListener("touchstart", (e) => {
       if (this.mode !== "walk") return;
-      for (const t of Array.from(e.changedTouches)) {
-        if (t.clientX < window.innerWidth / 2 && !joy) joy = { id: t.identifier, x: t.clientX, y: t.clientY };
-        else if (!look) look = { id: t.identifier, x: t.clientX, y: t.clientY };
-      }
+      for (const t of Array.from(e.changedTouches)) if (!look) look = { id: t.identifier, x: t.clientX, y: t.clientY };
       e.preventDefault();
     }, { passive: false });
     cv.addEventListener("touchmove", (e) => {
       if (this.mode !== "walk" || !this.walker) return;
       for (const t of Array.from(e.changedTouches)) {
-        if (joy && t.identifier === joy.id) { this.touchMove.x = clamp((t.clientX - joy.x) / 60); this.touchMove.z = clamp(-(t.clientY - joy.y) / 60); }
         if (look && t.identifier === look.id) {
-          this.walker.yaw -= (t.clientX - look.x) * 0.005;
-          this.walker.pitch = Math.max(-1.3, Math.min(1.3, this.walker.pitch - (t.clientY - look.y) * 0.005));
+          this.walker.yaw -= (t.clientX - look.x) * 0.006;
+          this.walker.pitch = Math.max(-1.3, Math.min(1.3, this.walker.pitch - (t.clientY - look.y) * 0.006));
           look.x = t.clientX; look.y = t.clientY;
+          this.invalidate(1);
         }
       }
       e.preventDefault();
     }, { passive: false });
     const end = (e: TouchEvent) => {
-      for (const t of Array.from(e.changedTouches)) {
-        if (joy && t.identifier === joy.id) { joy = null; this.touchMove.x = 0; this.touchMove.z = 0; }
-        if (look && t.identifier === look.id) look = null;
-      }
+      for (const t of Array.from(e.changedTouches)) if (look && t.identifier === look.id) look = null;
     };
     cv.addEventListener("touchend", end); cv.addEventListener("touchcancel", end);
     this.cleanup.push(() => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); });
@@ -977,6 +971,7 @@ export class ArchViewer {
         <button data-a="vr" class="av-b av-vr" hidden>${L("vr")}</button>
       </div>
       ${this.jumpList(levels)}
+      <div class="av-joy" aria-hidden="true"><div class="av-knob"></div></div>
       <div class="av-hint"></div>
       <div class="av-panel"></div>`;
     hud.addEventListener("click", (e) => {
@@ -993,16 +988,69 @@ export class ArchViewer {
         const order: Quality[] = ["auto", "performance", "balanced", "ultra"];
         this.setQuality(order[(order.indexOf(this.quality) + 1) % order.length]);
       } else if (a === "vr") { void this.enterVR();
-      } else if (a === "fs") {
-        const root = this.container.closest("[data-av-fullscreen]") ?? this.container;
-        if (document.fullscreenElement) document.exitFullscreen(); else (root as HTMLElement).requestFullscreen?.();
-      }
+      } else if (a === "fs") void this.toggleFullscreen();
     });
+    this.bindJoystick(hud.querySelector<HTMLElement>(".av-joy")!);
     this.container.appendChild(hud);
     this.hudEl = hud;
     this.updateHudState();
     if (this.opts.vr) void this.vrSupported().then((ok) => { const b = hud.querySelector<HTMLElement>("[data-a=vr]"); if (b) b.hidden = !ok; });
   }
+
+  /** Walking joystick for touch screens: drag the knob; distance from the centre = speed. */
+  private bindJoystick(joy: HTMLElement) {
+    const knob = joy.querySelector<HTMLElement>(".av-knob")!;
+    let id: number | null = null, cx = 0, cy = 0;
+    const R = 44;
+    const move = (x: number, y: number) => {
+      let dx = x - cx, dy = y - cy;
+      const l = Math.hypot(dx, dy);
+      if (l > R) { dx *= R / l; dy *= R / l; }
+      knob.style.transform = `translate(${dx}px,${dy}px)`;
+      this.touchMove.x = dx / R; this.touchMove.z = -dy / R;
+      this.invalidate(1);
+    };
+    const stop = () => { id = null; knob.style.transform = ""; this.touchMove.x = 0; this.touchMove.z = 0; joy.classList.remove("on"); };
+    joy.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const r = joy.getBoundingClientRect();
+      cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+      id = e.pointerId; joy.setPointerCapture(e.pointerId); joy.classList.add("on");
+      move(e.clientX, e.clientY);
+    });
+    joy.addEventListener("pointermove", (e) => { if (e.pointerId === id) { e.preventDefault(); move(e.clientX, e.clientY); } });
+    joy.addEventListener("pointerup", (e) => { if (e.pointerId === id) stop(); });
+    joy.addEventListener("pointercancel", (e) => { if (e.pointerId === id) stop(); });
+    joy.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+  }
+
+  /** Full screen. Phones that cannot do real full screen for web pages (iPhone) get the 3D view filling the window instead. */
+  async toggleFullscreen() {
+    const root = (this.container.closest("[data-av-fullscreen]") ?? this.container) as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+    const d = document as Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void };
+    if (root.classList.contains("av-pseudo-fs")) { this.setPseudoFs(root, false); return; }
+    if (document.fullscreenElement || d.webkitFullscreenElement) { (document.exitFullscreen?.() ?? d.webkitExitFullscreen?.()); return; }
+    try {
+      if (root.requestFullscreen) await root.requestFullscreen({ navigationUI: "hide" });
+      else if (root.webkitRequestFullscreen) await root.webkitRequestFullscreen();
+      else throw new Error("no fullscreen");
+      // landscape is nicer for walking; only works in full screen and not everywhere
+      try { await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.("landscape"); } catch { /* ignore */ }
+    } catch { this.setPseudoFs(root, true); }
+  }
+
+  private setPseudoFs(root: HTMLElement, on: boolean) {
+    root.classList.toggle("av-pseudo-fs", on);
+    document.documentElement.classList.toggle("av-noscroll", on);
+    if (on) {
+      const esc = (e: KeyboardEvent) => { if (e.key === "Escape") this.setPseudoFs(root, false); };
+      window.addEventListener("keydown", esc);
+      this.pseudoFsOff = () => window.removeEventListener("keydown", esc);
+    } else { this.pseudoFsOff?.(); this.pseudoFsOff = null; }
+    this.hudEl?.classList.toggle("av-isfs", on);
+    this.resize();
+  }
+  private pseudoFsOff: (() => void) | null = null;
 
   // ——— VR headsets (WebXR) ———
   private xrRig: Group | null = null;
@@ -1154,6 +1202,7 @@ export class ArchViewer {
     if (!hud) return;
     const L = (k: Parameters<typeof tr>[1]) => tr(this.lang, k);
     hud.querySelectorAll<HTMLButtonElement>("[data-a=walk]").forEach((b) => b.classList.toggle("on", this.mode === "walk"));
+    hud.classList.toggle("av-walking", this.mode === "walk");
     hud.querySelectorAll<HTMLButtonElement>("[data-a=orbit]").forEach((b) => b.classList.toggle("on", this.mode === "orbit" && !this.tour));
     hud.querySelectorAll<HTMLButtonElement>("[data-a=tour]").forEach((b) => b.classList.toggle("on", !!this.tour));
     if (level !== undefined) hud.querySelectorAll<HTMLButtonElement>("[data-lv],[data-place]").forEach((b) => b.classList.toggle("on", b.dataset.lv !== undefined && +b.dataset.lv === level));

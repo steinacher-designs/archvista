@@ -1,0 +1,46 @@
+// Phone check (touch): joystick walks, swipe looks, full screen works (real API or iPhone-style fallback). args: siteDir outDir
+import { chromium, devices } from "playwright"; import http from "node:http"; import { readFile } from "node:fs/promises"; import path from "node:path";
+const [dir, outDir] = process.argv.slice(2);
+const types = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".svg": "image/svg+xml" };
+const srv = http.createServer(async (q, r) => { try { let f = decodeURIComponent(q.url.split("?")[0]); if (f.endsWith("/")) f += "index.html"; const buf = await readFile(path.join(dir, f)); r.writeHead(200, { "content-type": types[path.extname(f)] ?? "application/octet-stream" }); r.end(buf); } catch { r.writeHead(404); r.end(); } }).listen(0);
+const b = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+for (const iphone of [true, false]) {
+  const ctx = await b.newContext({ ...devices["Pixel 7"], viewport: { width: 390, height: 780 } });
+  const p = await ctx.newPage();
+  if (iphone) await p.addInitScript(() => { delete Element.prototype.requestFullscreen; delete Element.prototype.webkitRequestFullscreen; });
+  const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+  const cdp = await ctx.newCDPSession(p);
+  const touch = async (type, pts) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: pts });
+  const drag = async (x0, y0, x1, y1, hold = 0) => { await touch("touchStart", [{ x: x0, y: y0, id: 1 }]); for (let i = 1; i <= 8; i++) { await touch("touchMove", [{ x: x0 + (x1 - x0) * i / 8, y: y0 + (y1 - y0) * i / 8, id: 1 }]); await p.waitForTimeout(40); } if (hold) await p.waitForTimeout(hold); await touch("touchEnd", []); };
+  const out = []; const ok = (n, c, x = "") => out.push(`${c ? "✓" : "✗"} ${n}${x ? " " + x : ""}`);
+  await p.goto(`http://localhost:${srv.address().port}/`);
+  await p.waitForFunction(() => window.archvista && !document.querySelector(".av-loading"), null, { timeout: 180000 });
+  await p.waitForTimeout(1000);
+  await p.locator("[data-a=walk]").tap();
+  await p.waitForTimeout(800);
+  const joy = p.locator(".av-joy");
+  ok("joystick visible in walk mode", await joy.isVisible());
+  const cam = () => p.evaluate(() => { const c = window.archvista.camera; return { x: c.position.x, z: c.position.z, ry: c.rotation.y }; });
+  const a = await cam();
+  const jb = await joy.boundingBox();
+  await drag(jb.x + jb.width / 2, jb.y + jb.height / 2, jb.x + jb.width / 2, jb.y + jb.height / 2 - 50, 2500);
+  const b1 = await cam();
+  ok("joystick walks", Math.hypot(b1.x - a.x, b1.z - a.z) > 0.3, `${Math.hypot(b1.x - a.x, b1.z - a.z).toFixed(2)} m`);
+  const vb = await p.locator("[data-archvista] canvas").boundingBox();
+  await drag(vb.x + vb.width * 0.7, vb.y + 200, vb.x + vb.width * 0.3, vb.y + 200);
+  await p.waitForTimeout(300);
+  const c1 = await cam();
+  ok("swipe looks around", Math.abs(c1.ry - b1.ry) > 0.2, `${((c1.ry - b1.ry) * 57.3).toFixed(0)}°`);
+  await p.locator("[data-a=fs]").tap();
+  await p.waitForTimeout(800);
+  const fs = await p.evaluate(() => { const v = document.querySelector("[data-av-fullscreen]"); const r = v.getBoundingClientRect(); return { native: !!document.fullscreenElement, pseudo: v.classList.contains("av-pseudo-fs"), w: Math.round(r.width), h: Math.round(r.height), canvasH: document.querySelector("[data-archvista] canvas").getBoundingClientRect().height }; });
+  ok(iphone ? "full screen (iPhone fallback) fills the screen" : "full screen (real) works", iphone ? fs.pseudo && fs.w === 390 && fs.h === 780 && fs.canvasH > 770 : fs.native, JSON.stringify(fs));
+  await p.screenshot({ path: `${outDir}/phone-${iphone ? "iphone" : "android"}-fs.png`, timeout: 120000 });
+  await p.locator("[data-a=fs]").tap();
+  await p.waitForTimeout(600);
+  ok("tap again leaves full screen", await p.evaluate(() => !document.fullscreenElement && !document.querySelector(".av-pseudo-fs")));
+  out.push("page errors: " + (errs.length ? errs.join(" | ") : "none"));
+  console.log((iphone ? "— iPhone (no fullscreen API)\n" : "— Android\n") + out.join("\n"));
+  await ctx.close();
+}
+await b.close(); srv.close();

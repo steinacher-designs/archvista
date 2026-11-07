@@ -7,7 +7,7 @@ const S = {
     walk: "Begehen", orbit: "Umsehen", tour: "Rundgang", quality: "Qualität", fullscreen: "Vollbild", auto: "Automatisch", vr: "VR-Brille",
     performance: "Leistung", balanced: "Ausgewogen", ultra: "Ultra",
     hintWalk: "Klicken zum Starten · W A S D gehen · Maus umsehen · Shift schneller · Esc beenden",
-    hintTouch: "Linke Hälfte: gehen · Rechte Hälfte: umsehen",
+    hintTouch: "Joystick: gehen · Wischen: umsehen",
     hintOrbit: "Ziehen zum Drehen · Mausrad zoomen · „Begehen“ für die Ich-Perspektive",
     loading: "Modell wird geladen", webgl: "Dieser Browser kann keine 3D-Grafik (WebGL2) anzeigen.",
   },
@@ -15,7 +15,7 @@ const S = {
     walk: "Walk", orbit: "Look around", tour: "Tour", quality: "Quality", fullscreen: "Full screen", auto: "Auto", vr: "VR headset",
     performance: "Performance", balanced: "Balanced", ultra: "Ultra",
     hintWalk: "Click to start · W A S D to walk · mouse to look · Shift to run · Esc to stop",
-    hintTouch: "Left half: walk · Right half: look",
+    hintTouch: "Joystick: walk · Swipe: look around",
     hintOrbit: "Drag to rotate · scroll to zoom · “Walk” for first-person",
     loading: "Loading model", webgl: "This browser cannot display 3D graphics (WebGL2).",
   },
@@ -58,5 +58,12 @@ export const HUD_CSS = `
 .av-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#fff;font:15px system-ui,sans-serif;background:#111;z-index:5;transition:opacity .6s}
 .av-loading .av-track{width:220px;height:3px;background:rgba(255,255,255,.2);border-radius:2px;overflow:hidden}
 .av-loading .av-fill{height:100%;width:0;background:var(--av-accent);transition:width .2s}
+.av-joy{position:absolute;left:22px;bottom:78px;width:124px;height:124px;border-radius:50%;background:rgba(18,18,20,.38);border:1.5px solid rgba(255,255,255,.35);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:none;place-items:center;pointer-events:auto;touch-action:none;z-index:3}
+.av-knob{width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.88);box-shadow:0 4px 14px rgba(0,0,0,.35);transition:transform .12s ease-out;pointer-events:none}
+.av-joy.on .av-knob{transition:none;background:var(--av-accent)}
+@media (pointer:coarse){.av-walking .av-joy{display:grid}.av-walking .av-levels{top:52px;bottom:auto;transform:none;max-height:calc(100% - 300px);min-height:84px}}
+.av-pseudo-fs{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;max-height:none!important;min-height:0!important;margin:0!important;border-radius:0!important;outline:0!important;z-index:2147483000!important}
+html.av-noscroll,html.av-noscroll body{overflow:hidden!important}
+:fullscreen [data-archvista],.av-pseudo-fs [data-archvista]{border-radius:0}
 @media (max-width:640px){.av-b{padding:7px 8px;font-size:12.5px}.av-bar{gap:2px;max-width:calc(100% - 16px)}.av-q,.av-sep{display:none!important}.av-bar{bottom:10px}.av-levels{top:auto;bottom:70px;transform:none;left:10px}}
 `;
