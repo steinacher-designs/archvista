@@ -5,6 +5,8 @@ import { PRESET } from "../materials";
 
 export interface GlbInputPart {
   presetId: string;
+  /** visible from its front only (SketchUp faces painted differently on each side) */
+  singleSided?: boolean;
   positions: Float32Array;
   normals: Float32Array;
   uvs: Float32Array;
@@ -21,11 +23,13 @@ export function mergeByMaterial(parts: GlbInputPart[]): GlbInputPart[] {
   const groups = new Map<string, GlbInputPart[]>();
   for (const p of parts) {
     if (!p.indices.length) continue;
-    const l = groups.get(p.presetId);
-    if (l) l.push(p); else groups.set(p.presetId, [p]);
+    const k = p.presetId + (p.singleSided ? "\u00001s" : "");
+    const l = groups.get(k);
+    if (l) l.push(p); else groups.set(k, [p]);
   }
   const out: GlbInputPart[] = [];
-  for (const [presetId, list] of groups) {
+  for (const list of groups.values()) {
+    const presetId = list[0].presetId, singleSided = !!list[0].singleSided;
     // keep chunks below 4M vertices so very large models stay loadable
     let batch: GlbInputPart[] = [], verts = 0;
     const flush = () => {
@@ -39,7 +43,7 @@ export function mergeByMaterial(parts: GlbInputPart[]): GlbInputPart[] {
         for (let i = 0; i < p.indices.length; i++) idx[io + i] = p.indices[i] + vo;
         vo += p.positions.length / 3; io += p.indices.length;
       }
-      out.push({ presetId, positions: pos, normals: nrm, uvs: uv, indices: idx });
+      out.push({ presetId, ...(singleSided ? { singleSided } : {}), positions: pos, normals: nrm, uvs: uv, indices: idx });
       batch = []; verts = 0;
     };
     for (const p of list) {
@@ -69,18 +73,19 @@ export function writeGlb(parts: GlbInputPart[], extras: Record<string, unknown> 
   };
 
   for (const p of merged) {
-    let mi = matIndex.get(p.presetId);
+    const mk = p.presetId + (p.singleSided ? "\u00001s" : "");
+    let mi = matIndex.get(mk);
     if (mi === undefined) {
       const pr = PRESET.get(p.presetId);
       const c = hexToLinear(pr?.color ?? "#cccccc");
       materials.push({
         name: p.presetId,
         pbrMetallicRoughness: { baseColorFactor: [...c, pr?.transmission ? 0.35 : 1], metallicFactor: pr?.metalness ?? 0, roughnessFactor: pr?.roughness ?? 0.8 },
-        doubleSided: true,
+        doubleSided: !p.singleSided,
         ...(pr?.transmission ? { alphaMode: "BLEND" } : {}),
       });
       mi = materials.length - 1;
-      matIndex.set(p.presetId, mi);
+      matIndex.set(mk, mi);
     }
     const nv = p.positions.length / 3;
     let min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];

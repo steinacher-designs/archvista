@@ -22,6 +22,8 @@ export interface ModelMesh {
   material?: string;
   /** Texture coordinates from the source program (SketchUp), in texture tiles. */
   uvs?: Float32Array;
+  /** Visible from the front only (SketchUp face painted differently on each side). */
+  singleSided?: boolean;
   positions: Float32Array; // metres, Y-up, relative to origin
   normals: Float32Array;
   indices: Uint32Array;
@@ -52,6 +54,10 @@ export interface CadMaterial {
   mapSize?: number;
   /** the texture is placed by the source program's own UVs (SketchUp) */
   sourceUv?: boolean;
+  /** SketchUp "colorize": the texture is tinted to `color` */
+  colorize?: boolean;
+  /** the source says the material is fully opaque (SketchUp knows transparency exactly) */
+  opaque?: boolean;
   opacity?: number;
 }
 

@@ -135,11 +135,12 @@ export const useStore = create<State>((set, get) => ({
     let customs = existing?.customMaterials;
     // images: from a ZIP, or embedded in a SketchUp file (those are re-read from the .skp every time)
     const imgs = [...(images ?? []), ...(res.images ?? [])];
-    if (imgs.length && (images?.length || !existing?.customMaterials)) customs = await cadTextures(existing?.id ?? newProject(fileName, hash).id, res.model, imgs);
+    // SketchUp files carry their textures: always re-read, so improvements to the import reach existing projects too
+    if (imgs.length && (images?.length || format === "skp" || !existing?.customMaterials)) customs = await cadTextures(existing?.id ?? newProject(fileName, hash).id, res.model, imgs);
     applyCadTextures(res.scene, customs);
     if (format === "dxf") noteMissingTextures(res.model, customs, !!images?.length, get().lang);
     let project = existing ?? automatic({ ...newProject(fileName, hash), ...(customs?.length ? { customMaterials: customs } : {}) }, res.scene, res.model);
-    project = { ...project, language: project.language ?? get().lang };
+    project = { ...project, language: project.language ?? get().lang, ...(existing && format === "skp" ? { customMaterials: customs } : {}) };
     set({ model: res.model, scene: res.scene, project, past: [], future: [], screen: "work", step: "customize", timings: res.timings });
     void platform.saveProject(project, existing ? undefined : bytes);
   },
@@ -204,7 +205,7 @@ async function cadTextures(projectId: string, model: ModelMeta, images: { name: 
       id: `img:${textureKey(cm.name).replace(/\./g, "_")}`, label: { de: cm.name, en: cm.name },
       color: cm.color !== undefined ? "#" + cm.color.toString(16).padStart(6, "0") : "#b9b9b9",
       roughness: 0.8, metalness: 0, texture: "none", scale: !cm.sourceUv && cm.mapSize && cm.mapSize > 0.01 && cm.mapSize < 100 ? cm.mapSize : 1,
-      group: "cad", image: key, cadName: cm.name, ...(cm.sourceUv ? { sourceUv: true } : {}),
+      group: "cad", image: key, cadName: cm.name, ...(cm.sourceUv ? { sourceUv: true } : {}), ...(cm.colorize ? { colorize: true } : {}),
       ...(cm.opacity !== undefined ? { transmission: 1, opacity: cm.opacity } : {}),
     });
   }

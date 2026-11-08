@@ -167,3 +167,14 @@ describe("ZIP reader", () => {
     await expect(unzip(new TextEncoder().encode("not a zip at all"))).rejects.toThrow(/kein gültiges ZIP/);
   });
 });
+
+describe("one-sided surfaces in the published file", () => {
+  it("GLB keeps one-sided parts apart and marks them not double-sided", async () => {
+    const { writeGlb, readGlb } = await import("../src/core/export/glb");
+    const tri = { positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]), uvs: new Float32Array(6), indices: new Uint32Array([0, 1, 2]) };
+    const glb = writeGlb([{ presetId: "oak", ...tri }, { presetId: "oak", singleSided: true, ...tri }, { presetId: "oak", ...tri }]);
+    const { json } = readGlb(glb);
+    expect(json.meshes.length).toBe(2);
+    expect(json.materials.map((m: { doubleSided: boolean }) => m.doubleSided).sort()).toEqual([false, true]);
+  });
+});

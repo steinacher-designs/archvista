@@ -59,7 +59,7 @@ export function publicParts(scene: PreparedScene, project: Project) {
     // SketchUp's own textures keep SketchUp's texture placement (as long as the part was not cut by a hidden area)
     const own = part.uvTex && m.positions === part.positions && resolvePreset(presetId)?.sourceUv;
     const uvs = own ? part.uvTex! : m.positions === part.positions ? part.uvs : boxUV(m.positions, m.normals);
-    return { presetId, key: part.key, positions: m.positions, normals: m.normals, uvs, indices: m.indices };
+    return { presetId, key: part.key, ...(part.singleSided ? { singleSided: true } : {}), positions: m.positions, normals: m.normals, uvs, indices: m.indices };
   });
   return { parts, removedTriangles: cut.removedTriangles, clippedTriangles: cut.clippedTriangles };
 }

@@ -53,7 +53,7 @@ export interface ViewerOptions {
   resolveImage?: (name: string) => Promise<string | null>;
 }
 
-export interface BuildingPart { presetId: string; /** editor only: which model part this is (never published) */ key?: string; positions: Float32Array; normals: Float32Array; uvs: Float32Array; indices: Uint32Array | Uint16Array }
+export interface BuildingPart { presetId: string; /** editor only: which model part this is (never published) */ key?: string; /** visible from the front only */ singleSided?: boolean; positions: Float32Array; normals: Float32Array; uvs: Float32Array; indices: Uint32Array | Uint16Array }
 
 export class ArchViewer {
   readonly renderer: WebGLRenderer;
@@ -161,6 +161,7 @@ export class ArchViewer {
       const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as Material;
       parts.push({
         presetId: mat.name,
+        singleSided: mat.side !== DoubleSide,
         positions: g.attributes.position.array as Float32Array,
         normals: g.attributes.normal.array as Float32Array,
         uvs: (g.attributes.uv?.array as Float32Array) ?? new Float32Array((g.attributes.position.count) * 2),
@@ -178,6 +179,7 @@ export class ArchViewer {
     disposeGroup(this.building);
     this.building.clear();
     this.mats.clear();
+    this.matRank = 0;
     for (const p of parts) {
       if (!p.indices.length) continue;
       const g = new BufferGeometry();
@@ -187,7 +189,8 @@ export class ArchViewer {
       g.setIndex(new BufferAttribute(p.indices, 1));
       g.computeBoundingSphere();
       g.boundsTree = new MeshBVH(g);
-      const mesh = new Mesh(g, this.material(p.presetId, config.materials[p.presetId]));
+      const mesh = new Mesh(g, this.material(p.presetId, config.materials[p.presetId], !!p.singleSided));
+      mesh.userData.singleSided = !!p.singleSided;
       const glass = p.presetId === "glass";
       mesh.castShadow = !glass;
       mesh.receiveShadow = true;
@@ -219,7 +222,7 @@ export class ArchViewer {
       keyed = true;
       const id = byKey.get(me.userData.key);
       if (!id || id === me.userData.presetId) return;
-      me.material = this.material(id, materials[id]);
+      me.material = this.material(id, materials[id], !!me.userData.singleSided);
       me.userData.presetId = id;
       const glass = id.split("~")[0] === "glass";
       me.castShadow = !glass; me.renderOrder = glass ? 2 : 0;
@@ -233,8 +236,9 @@ export class ArchViewer {
   }
 
   // ——— editor: highlight parts / click a surface to find its part ———
+  private matRank = 0;
   private hlGroup = new Group();
-  private hlMat = new MeshBasicMaterial({ color: "#5d6db0", transparent: true, opacity: 0.45, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: DoubleSide });
+  private hlMat = new MeshBasicMaterial({ color: "#5d6db0", transparent: true, opacity: 0.45, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -12, side: DoubleSide });
   private hlKey: string | null = null;
   /** Tint all surfaces of one model part (null clears). */
   highlight(key: string | null) {
@@ -260,21 +264,26 @@ export class ArchViewer {
     return hit ? (hit.object as Mesh).userData.key as string : null;
   }
 
-  private material(id: string, pr?: MaterialPreset): Material {
-    const hit = this.mats.get(id);
+  private material(id: string, pr?: MaterialPreset, singleSided = false): Material {
+    // one-sided surfaces (SketchUp faces painted differently front/back) get their own material: FrontSide
+    const ck = singleSided ? `${id}\u00001s` : id;
+    const hit = this.mats.get(ck);
     if (hit) return hit;
     pr = pr ?? { id, label: { de: id, en: id }, color: "#cccccc", roughness: 0.8, metalness: 0, texture: "none", scale: 1 };
     const m = new MeshPhysicalMaterial({
       name: id, color: pr.texture === "none" ? pr.color : "#ffffff", roughness: pr.roughness, metalness: pr.metalness,
-      clearcoat: pr.clearcoat ?? 0, side: DoubleSide, clippingPlanes: [this.clipPlane],
+      clearcoat: pr.clearcoat ?? 0, side: singleSided ? FrontSide : DoubleSide, clippingPlanes: [this.clipPlane],
     });
+    // surfaces in exactly the same plane with different materials would flicker ("z-fighting"):
+    // a tiny, fixed depth priority per material decides consistently which one is seen
+    m.polygonOffset = true; m.polygonOffsetFactor = 0; m.polygonOffsetUnits = -(this.matRank++ % 16);
     if (pr.transmission) {
       m.transparent = true;
       m.opacity = pr.opacity ?? 0.3;
       m.roughness = 0.02;
       m.envMapIntensity = 1.5;
       m.depthWrite = false;
-      m.side = DoubleSide;
+      m.side = singleSided ? FrontSide : DoubleSide;
       m.ior = pr.ior ?? 1.5;
     }
     const maps = makeMaps(pr.texture, pr.color);
@@ -293,14 +302,22 @@ export class ArchViewer {
       void (async () => {
         // always asynchronous: the material must be registered (this.mats) before the check below
         const url = await (this.opts.resolveImage ? this.opts.resolveImage(img) : Promise.resolve(`${this.opts.imageBase ?? "assets/tex-user/"}${encodeURIComponent(img)}`));
-        if (!url || this.mats.get(id) !== m) return;
+        if (!url || this.mats.get(ck) !== m) return;
         try {
           const tx = await new TextureLoader().loadAsync(url);
-          if (this.mats.get(id) !== m) { tx.dispose(); return; }
+          if (this.mats.get(ck) !== m) { tx.dispose(); return; }
           tx.wrapS = tx.wrapT = RepeatWrapping; tx.colorSpace = SRGBColorSpace; tx.anisotropy = 8;
           const rep = 1 / Math.max(0.05, pr!.scale || 1);
           tx.repeat.set(rep, rep);
-          m.map = tx; m.color.set("#ffffff"); m.needsUpdate = true;
+          m.map = tx; m.color.set("#ffffff");
+          // look at the picture once: SketchUp "colorize" tint, and real holes for PNGs with transparency
+          const st = imageStats(tx.image as CanvasImageSource);
+          if (st && pr!.colorize) {
+            const target = new Color(pr!.color), avg = new Color().setRGB(st.r, st.g, st.b, SRGBColorSpace);
+            m.color.setRGB(Math.min(8, target.r / Math.max(avg.r, 1e-3)), Math.min(8, target.g / Math.max(avg.g, 1e-3)), Math.min(8, target.b / Math.max(avg.b, 1e-3)));
+          }
+          if (st?.holes) { m.alphaTest = 0.5; m.transparent = false; }
+          m.needsUpdate = true;
           this.invalidate(4);
         } catch (e) { console.warn("[archvista] Texturbild nicht geladen:", url, e); /* keep the plain colour */ }
       })();
@@ -308,7 +325,7 @@ export class ArchViewer {
     // upgrade to photo-scanned textures when the asset library has them
     if (pr.texture !== "none") {
       this.lib.photo(pr.tex ?? id).then((ph) => {
-        if (!ph || this.mats.get(id) !== m) return;
+        if (!ph || this.mats.get(ck) !== m) return;
         const rep = 1 / ph.size;
         const c = (t: Texture) => { const x = t.clone(); x.repeat.set(rep, rep); x.needsUpdate = true; return x; };
         // paint-like surfaces: relief from the scan, colour stays exactly the chosen colour
@@ -324,7 +341,7 @@ export class ArchViewer {
         m.needsUpdate = true;
       });
     }
-    this.mats.set(id, m);
+    this.mats.set(ck, m);
     return m;
   }
 
@@ -1376,6 +1393,26 @@ function dirFrom(elevDeg: number, azDeg: number) {
 }
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+/** Average colour (sRGB 0–1) and whether the image has transparent holes — from a small downscaled copy. */
+function imageStats(img: CanvasImageSource): { r: number; g: number; b: number; holes: boolean } | null {
+  try {
+    const n = 24;
+    const cv: HTMLCanvasElement | OffscreenCanvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(n, n) : Object.assign(document.createElement("canvas"), { width: n, height: n });
+    const ctx = cv.getContext("2d") as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, n, n);
+    const d = ctx.getImageData(0, 0, n, n).data;
+    let r = 0, g = 0, b = 0, w = 0, clear = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const a = d[i + 3] / 255;
+      if (a < 0.5) clear++;
+      r += d[i] * a; g += d[i + 1] * a; b += d[i + 2] * a; w += a;
+    }
+    if (!w) return null;
+    return { r: r / w / 255, g: g / w / 255, b: b / w / 255, holes: clear > d.length / 4 * 0.03 };
+  } catch { return null; }
+}
+
 function disposeMaterial(m: Material) {
   const mm = m as MeshPhysicalMaterial;
   for (const k of ["map", "normalMap", "roughnessMap", "aoMap"] as const) {

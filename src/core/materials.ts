@@ -29,6 +29,8 @@ export interface MaterialPreset {
   cadName?: string;
   /** Use the source program's texture coordinates (SketchUp) instead of ARCHVISTA's box mapping. */
   sourceUv?: boolean;
+  /** Tint the own texture so its average colour becomes `color` (SketchUp "colorize"). */
+  colorize?: boolean;
 }
 
 export type MaterialGroup = "cad" | "wall" | "floor" | "wood" | "stone" | "roof" | "metal" | "glass" | "outdoor";
@@ -242,12 +244,14 @@ const CAD_RULES: [RegExp, string | ((t: string, cat: Category) => string)][] = [
  * Material for a part that carries a CAD material: by name (and description / texture file name),
  * keeping the CAD colour where the material is paint-like. Returns null when nothing fits.
  */
-export function assignFromCad(cad: { name: string; description?: string; map?: string; color?: number; opacity?: number }, category: Category): Assignment | null {
+export function assignFromCad(cad: { name: string; description?: string; map?: string; color?: number; opacity?: number; opaque?: boolean }, category: Category): Assignment | null {
   const text = `${cad.name} ${cad.description ?? ""} ${cad.map ?? ""}`.toLowerCase().replace(/[_\-.]+/g, " ");
   let id = "";
   for (const [re, to] of CAD_RULES) {
     if (!re.test(text)) continue;
     id = typeof to === "string" ? to : to(text, category);
+    // the file says it is not see-through (e.g. SketchUp "Glass Railing Color" = the frame): no glass
+    if (id.startsWith("glass") && cad.opaque) { id = ""; continue; }
     if (id) break;
   }
   if (!id && cad.opacity !== undefined && cad.opacity < 0.8) id = "glass";

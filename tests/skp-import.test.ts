@@ -46,6 +46,32 @@ describe("SketchUp import", () => {
     if (plain) expect(plain.color).toBe(0xdddddd);
   });
 
+  it("tag colours (SketchUp 2021+ 'Layer_…' materials) are not taken as materials", () => {
+    const { model } = importSkp(fx("nesting_2021.skp"));
+    expect(model.materials.some((m) => /^Layer_/.test(m.name))).toBe(false);
+    for (const m of model.meshes) if (!m.material) expect(m.color).toBe(0xdddddd);
+  });
+
+  it("every triangle faces the way its normal points (correct light, one-sided copies face outwards)", () => {
+    for (const f of ["nesting_2021.skp", "legacy_v2020_textured.skp"]) {
+      const { model } = importSkp(fx(f));
+      for (const m of model.meshes) {
+        const P = m.positions, N = m.normals, I = m.indices;
+        for (let i = 0; i < I.length; i += 3) {
+          const a = I[i] * 3, b = I[i + 1] * 3, c = I[i + 2] * 3;
+          const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+          expect((uy * vz - uz * vy) * N[a] + (uz * vx - ux * vz) * N[a + 1] + (ux * vy - uy * vx) * N[a + 2]).toBeGreaterThanOrEqual(-1e-9);
+        }
+      }
+    }
+  });
+
+  it("an opaque material called 'glass' is not made see-through", async () => {
+    const { assignFromCad } = await import("../src/core/materials");
+    expect(assignFromCad({ name: "Glass Railing Color", color: 0xc6c6c6, opaque: true }, "wall")?.presetId).toBe("paint_matte");
+    expect(assignFromCad({ name: "Railing Glass", color: 0x3f9689, opacity: 0.13 }, "wall")?.presetId).toBe("glass");
+  });
+
   it("cleans SketchUp library names", () => {
     expect(cleanSkpName("[Roofing Tile Spanish]")).toBe("Roofing Tile Spanish");
     expect(cleanSkpName("0037_SandyBrown")).toBe("SandyBrown");

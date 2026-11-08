@@ -22,6 +22,8 @@ export interface ScenePart {
   uvs: Float32Array;
   /** Texture coordinates from the source program (SketchUp), used for its own textures. */
   uvTex?: Float32Array;
+  /** Visible from the front only (SketchUp face painted differently on each side). */
+  singleSided?: boolean;
   indices: Uint32Array;
   auto: Assignment;
 }
@@ -81,6 +83,7 @@ export function partition(meshes: ModelMesh[], cadMaterials: CadMaterial[] = [])
       key: `${m.layer}|${category}|${role}|${m.color}${m.material ? `|m:${m.material}` : ""}`,
       layer: m.layer, category, basis, role, color: m.color,
       ...(m.material ? { cadMaterial: m.material } : {}),
+      ...(m.singleSided ? { singleSided: true } : {}),
       positions: sub.positions, normals: sub.normals, indices: sub.indices,
       uvs: boxUVs(sub.positions, sub.normals),
       ...(sub.uvs ? { uvTex: sub.uvs } : {}),
