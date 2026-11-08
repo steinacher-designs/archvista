@@ -3,7 +3,7 @@
 import type { PreparedScene, ScenePart } from "../scene";
 import type { Project, Hotspot, Viewpoint, EnvironmentId, Quality, Lighting, Place } from "../project";
 import { Zone, removeGreyGeometry, pointInZone } from "../zones";
-import { PRESET, MaterialPreset, withColour, setCustomPresets } from "../materials";
+import { PRESET, MaterialPreset, withColour, setCustomPresets, resolvePreset } from "../materials";
 import { writeGlb } from "./glb";
 import { cellOf } from "../analysis/spatial";
 
@@ -56,7 +56,9 @@ export function publicParts(scene: PreparedScene, project: Project) {
   const parts = cut.meshes.map((m) => {
     const part = byId.get(m.id)!;
     const presetId = partMaterialId(part, project);
-    const uvs = m.positions === part.positions ? part.uvs : boxUV(m.positions, m.normals);
+    // SketchUp's own textures keep SketchUp's texture placement (as long as the part was not cut by a hidden area)
+    const own = part.uvTex && m.positions === part.positions && resolvePreset(presetId)?.sourceUv;
+    const uvs = own ? part.uvTex! : m.positions === part.positions ? part.uvs : boxUV(m.positions, m.normals);
     return { presetId, key: part.key, positions: m.positions, normals: m.normals, uvs, indices: m.indices };
   });
   return { parts, removedTriangles: cut.removedTriangles, clippedTriangles: cut.clippedTriangles };

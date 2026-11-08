@@ -20,6 +20,8 @@ export interface ModelMesh {
   color: number;
   /** CAD material name, if the drawing assigns one. */
   material?: string;
+  /** Texture coordinates from the source program (SketchUp), in texture tiles. */
+  uvs?: Float32Array;
   positions: Float32Array; // metres, Y-up, relative to origin
   normals: Float32Array;
   indices: Uint32Array;
@@ -48,6 +50,8 @@ export interface CadMaterial {
   map?: string;
   /** metres per texture tile, if the file says so */
   mapSize?: number;
+  /** the texture is placed by the source program's own UVs (SketchUp) */
+  sourceUv?: boolean;
   opacity?: number;
 }
 

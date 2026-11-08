@@ -23,6 +23,7 @@ Mit **„Alles automatisch“** auf dem Startbildschirm geht es direkt zum Verö
 ## 3. Anpassen (alles optional)
 - **Umgebung:** Stadt, Natur, Küste (echte Foto-Panoramen) oder Studio. Ein Klick.
 - **Licht:** Tag, Nachmittag oder Abendstimmung (mit Licht in den Räumen); Bildqualität automatisch oder Leistung / Ausgewogen / Ultra.
+- **SketchUp:** .skp-Dateien (SketchUp 2013 bis heute) einfach hineinziehen – Geometrie, Tags, Materialien und Texturbilder kommen mit; Texturen sitzen wie in SketchUp. Sehr alte Dateien (2019/2020 mit eigenen Linienstilen) bitte in SketchUp mit „Speichern unter“ in einer aktuellen Version speichern.
 - **Materialien:** Im 3D-Bild auf eine Fläche klicken (oder ein Bauteil in der Liste wählen) und ein Material aus den Musterbildern wählen – die Änderung ist sofort sichtbar, die Ansicht bleibt stehen. Materialien aus AutoCAD werden übernommen: Namen und Farben direkt aus der DXF, eigene Texturbilder wenn DXF und Bilder (JPG/PNG) als ZIP importiert werden. Anleitung: Startseite → „Materialien aus AutoCAD übernehmen“.
 - **Design:** zehn Website-Designs (Minimal, Atelier, Noir, Kino, Swiss, Papier, Monografie, Studio, Plan, Beton), Akzentfarbe, automatischer Rundgang. Info-Text und Pläne sind optional – leer gelassen, zeigt die Website nur das Modell. Besucher mit VR-Brille (z. B. Meta Quest) sehen einen Knopf „VR-Brille“: linker Stick gehen, rechter Stick drehen.
 - **Texte:** Titel, Architekt:in / Büro, Beschreibung, Sprache, eigene Bilder. ARCHVISTA erfindet keine Texte.

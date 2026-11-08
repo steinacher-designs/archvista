@@ -51,5 +51,5 @@ export function PreviewStage({ mode }: { mode: "web" | "phone" }) {
   const [url, setUrl] = useState(lastUrl);
   useEffect(() => { listeners.add(setUrl); return () => { listeners.delete(setUrl); }; }, []);
   if (!url) return <div className="center" style={{ position: "absolute", inset: 0, color: "#fff" }}><div className="spinner" /></div>;
-  return mode === "phone" ? <div className="phone"><iframe title="preview" src={url} allow="fullscreen; xr-spatial-tracking" allowFullScreen /></div> : <iframe title="preview" src={url} data-testid="site-frame" allow="fullscreen; xr-spatial-tracking" allowFullScreen />;
+  return mode === "phone" ? <div className="phone"><iframe title="preview" src={url} allow="fullscreen; xr-spatial-tracking" /></div> : <iframe title="preview" src={url} data-testid="site-frame" allow="fullscreen; xr-spatial-tracking" />;
 }

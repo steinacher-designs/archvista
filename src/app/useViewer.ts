@@ -40,6 +40,9 @@ export function useViewer(host: React.RefObject<HTMLDivElement | null>, scene: P
   // geometry: rebuild when the scene or hidden areas change (camera stays put unless it is a new model)
   const greyKey = project ? JSON.stringify(project.zones.filter((z) => z.kind === "grey")) : "";
   const builtFor = useRef<unknown>(null);
+  const builtUv = useRef("");
+  /** Which parts currently use the source program's texture coordinates (SketchUp textures). */
+  const uvSignature = (sc: PreparedScene, pr: Project) => { setCustomPresets(pr.customMaterials); return sc.parts.filter((p) => p.uvTex && resolvePreset(partMaterialId(p, pr))?.sourceUv).map((p) => p.id).join(","); };
   useEffect(() => {
     const v = viewer.current;
     if (!v || !scene || !project) return;
@@ -49,6 +52,7 @@ export function useViewer(host: React.RefObject<HTMLDivElement | null>, scene: P
       const cfg = publicConfig(scene, pr, new Set(pp.parts.map((p) => p.presetId)));
       v.setBuilding(pp.parts, cfg, { keepView: builtFor.current === scene });
       builtFor.current = scene;
+      builtUv.current = uvSignature(scene, pr);
     }, 60);
     return () => clearTimeout(id);
   }, [scene, greyKey]);
@@ -67,9 +71,11 @@ export function useViewer(host: React.RefObject<HTMLDivElement | null>, scene: P
       const pr = resolvePreset(id);
       if (pr) mats[id] = pr;
     }
-    if (!v.setPartMaterials(byKey, mats)) {
+    const uvNow = uvSignature(scene, project);
+    if (uvNow !== builtUv.current || !v.setPartMaterials(byKey, mats)) {
       const pp = publicParts(scene, project);
       v.setBuilding(pp.parts, publicConfig(scene, project, new Set(pp.parts.map((p) => p.presetId))), { keepView: true });
+      builtUv.current = uvNow;
     }
   }, [matKey]);
 

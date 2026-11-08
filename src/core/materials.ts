@@ -27,6 +27,8 @@ export interface MaterialPreset {
   image?: string;
   /** Name of the CAD material this came from. */
   cadName?: string;
+  /** Use the source program's texture coordinates (SketchUp) instead of ARCHVISTA's box mapping. */
+  sourceUv?: boolean;
 }
 
 export type MaterialGroup = "cad" | "wall" | "floor" | "wood" | "stone" | "roof" | "metal" | "glass" | "outdoor";
@@ -200,11 +202,11 @@ export function assignMaterial(layer: string, category: Category, role: Role, co
 const hex = (rgb: number) => "#" + rgb.toString(16).padStart(6, "0");
 /** Keyword rules for CAD material names (German + English, incl. Autodesk library names). First match wins. */
 const CAD_RULES: [RegExp, string | ((t: string, cat: Category) => string)][] = [
-  [/(glas|glass|verglas|glazing|window\s*pane)/, (t) => /(milch|frost|satin|matt|opal)/.test(t) ? "glass_frosted" : /(get[öo]nt|tint|grau|grey|gray|bronze|smoke)/.test(t) ? "glass_tinted" : "glass"],
+  [/(glas|glass|verglas|glazing|window\s*pane)/, (t) => /(milch|frost|satin|matt|opal|translucent|safety)/.test(t) ? "glass_frosted" : /(get[öo]nt|tint|grau|grey|gray|bronze|smoke)/.test(t) ? "glass_tinted" : "glass"],
   [/(gr[üu]ndach|green\s*roof|sedum)/, "green_roof"],
   [/(rasen|gras|grass|lawn|turf)/, "grass"],
   [/(kies|schotter|gravel|split\b)/, "gravel"],
-  [/(dachziegel|roof\s*tile|clay\s*tile|biber|tondach|ziegeldach|terracotta\s*roof)/, "roof_clay"],
+  [/(dachziegel|roof(ing)?\s*tile|clay\s*tile|spanish\s*tile|tile\s*spanish|biber|tondach|ziegeldach|terracotta\s*roof)/, "roof_clay"],
   [/(schiefer|slate|shingle|schindel|eternit)/, (_t, cat) => cat === "floor" ? "slate_floor" : "roof_slate"],
   [/(klinker|brick|ziegel|backstein|mauerwerk|masonry)/, (t) => /(wei[ßs]|white)/.test(t) ? "white_brick" : /(dunkel|dark|schwarz|black|anthrazit)/.test(t) ? "dark_brick" : "brick"],
   [/(terrazzo)/, "terrazzo"],

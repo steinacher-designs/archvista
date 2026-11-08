@@ -1,0 +1,45 @@
+// End-to-end: open a SketchUp file in the app — geometry, CAD materials, embedded textures; then the website preview.
+import { chromium } from "playwright"; import http from "node:http"; import { readFile } from "node:fs/promises"; import path from "node:path";
+const [dist, skp, out] = process.argv.slice(2);
+const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml" };
+const srv = http.createServer(async (q, r) => { let f = decodeURIComponent(q.url.split("?")[0]); if (f === "/") f = "/index.html"; try { const b = await readFile(path.join(dist, f)); r.writeHead(200, { "content-type": types[path.extname(f)] ?? "application/octet-stream" }); r.end(b); } catch { r.writeHead(404); r.end(); } }).listen(0);
+const b = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+await p.addInitScript(() => { localStorage.setItem("av-maxfps", "1"); localStorage.setItem("av-auto", "0"); sessionStorage.setItem("av-gpu-hint", "off"); });
+const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+const texReq = []; p.on("requestfinished", async (r) => { if (r.url().includes("tex-user")) { const resp = await r.response(); texReq.push(r.url().split("/").pop() + " " + resp?.status()); } });
+p.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errs.push("console: " + m.text().slice(0, 200)); });
+const res = []; const ok = (n, c, x = "") => res.push(`${c ? "✓" : "✗"} ${n}${x ? " " + x : ""}`);
+await p.goto(`http://localhost:${srv.address().port}/`);
+await p.getByTestId("file").setInputFiles(skp);
+await p.getByTestId("viewer").waitFor({ timeout: 120000 });
+await p.waitForTimeout(12000);
+const info = await p.evaluate(() => { const ids = new Set(); let maps = 0; window.__archvistaViewer.scene.traverse((o) => { if (o.isMesh && o.userData.key) { ids.add(o.userData.presetId); if (o.material.map?.image && String(o.userData.presetId).startsWith("img:")) maps++; } }); return { ids: [...ids], maps }; });
+ok("SketchUp textures in 3D", info.maps > 0, `${info.maps} mesh(es) with own texture`);
+res.push("  materials: " + info.ids.join(", "));
+await p.getByTestId("tab-materials").click();
+await p.waitForTimeout(800);
+const rows = await p.locator(".mhead small").allTextContents();
+ok("SketchUp names in the list", rows.some((t) => /Roofing Tile Spanish|Polished Concrete/.test(t)), rows.slice(0, 4).join(" | "));
+await p.screenshot({ path: `${out}/skp-app.png`, timeout: 120000 });
+await p.getByTestId("step-preview").click();
+await p.waitForTimeout(1500);
+await p.getByTestId("preview-web").click();
+let frame = null;
+for (let i = 0; i < 60 && !frame; i++) { await p.waitForTimeout(1000); frame = p.frames().find((f) => f.url().includes("__preview")); }
+if (frame) await frame.waitForFunction(() => window.archvista && !document.querySelector(".av-loading"), null, { timeout: 120000 }).catch(() => {});
+await p.waitForTimeout(8000);
+if (frame) {
+  const site = await frame.evaluate(() => { let maps = 0; window.archvista?.scene.traverse((o) => { if (o.isMesh && o.material?.map?.image && String(o.material.name).startsWith("img:")) maps++; }); return { maps, loaded: !!window.archvista }; }).catch((e) => ({ err: e.message }));
+  ok("website preview shows SketchUp textures", site.maps > 0, JSON.stringify(site));
+  res.push("  site mesh materials: " + await frame.evaluate(() => { const n = new Set(); window.archvista.scene.traverse((o) => { if (o.isMesh && o.parent?.type !== "Scene") n.add(o.material.name + (o.material.map ? "+map" : "")); }); return [...n].join(", "); }));
+  res.push("  viewer: " + await frame.evaluate(async () => { const v = window.archvista; const m = v.mats.get("img:roofing_tile_spanish"); const pr = v.config.materials["img:roofing_tile_spanish"]; return JSON.stringify({ imageBase: v.opts.imageBase, hasResolver: !!v.opts.resolveImage, mat: !!m, map: !!m?.map, prImage: pr?.image, matsSize: v.mats.size }); }));
+  res.push("  img element: " + await frame.evaluate(() => new Promise((r) => { const i = new Image(); i.onload = () => r("ok " + i.width + "x" + i.height); i.onerror = () => r("error"); i.src = "assets/tex-user/roofing_tile_spanish.jpg"; setTimeout(() => r("timeout"), 8000); })));
+  res.push("  retry material: " + await frame.evaluate(async () => { const v = window.archvista; const id = "img:roofing_tile_spanish"; v.mats.delete(id); const m = v.material(id, v.config.materials[id]); await new Promise((r) => setTimeout(r, 5000)); return "map=" + !!m.map + " same=" + (v.mats.get(id) === m); }));
+  res.push("  fetch tex: " + await frame.evaluate(async () => { const r = await fetch("assets/tex-user/roofing_tile_spanish.jpg"); return r.status + " " + (await r.arrayBuffer()).byteLength; }));
+  res.push("  tex requests: " + (texReq.join(", ") || "none"));
+  res.push("  config: " + await frame.evaluate(async () => { const c = await (await fetch("assets/scene.json")).json(); return Object.entries(c.materials).filter(([k]) => k.startsWith("img:")).map(([k, v]) => k + "→" + v.image).join(", "); }));
+} else ok("website preview frame", false, "not found");
+await p.screenshot({ path: `${out}/skp-web.png`, timeout: 120000 });
+res.push("page errors: " + (errs.length ? errs.join(" | ") : "none"));
+console.log(res.join("\n")); await b.close(); srv.close();

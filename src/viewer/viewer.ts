@@ -291,7 +291,8 @@ export class ArchViewer {
     if (pr.image) {
       const img = pr.image;
       void (async () => {
-        const url = this.opts.resolveImage ? await this.opts.resolveImage(img) : `${this.opts.imageBase ?? "assets/tex-user/"}${encodeURIComponent(img)}`;
+        // always asynchronous: the material must be registered (this.mats) before the check below
+        const url = await (this.opts.resolveImage ? this.opts.resolveImage(img) : Promise.resolve(`${this.opts.imageBase ?? "assets/tex-user/"}${encodeURIComponent(img)}`));
         if (!url || this.mats.get(id) !== m) return;
         try {
           const tx = await new TextureLoader().loadAsync(url);
@@ -301,7 +302,7 @@ export class ArchViewer {
           tx.repeat.set(rep, rep);
           m.map = tx; m.color.set("#ffffff"); m.needsUpdate = true;
           this.invalidate(4);
-        } catch { /* missing image: keep the plain colour */ }
+        } catch (e) { console.warn("[archvista] Texturbild nicht geladen:", url, e); /* keep the plain colour */ }
       })();
     }
     // upgrade to photo-scanned textures when the asset library has them

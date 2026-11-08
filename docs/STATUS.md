@@ -17,6 +17,7 @@
 | Infopunkte, Blickpunkte, Rundgang | ✅ | |
 | 10 Website-Designs, Modell im Mittelpunkt, Info/Pläne optional, keine Standbilder | ✅ | |
 | CAD-Materialien aus DXF (MATERIAL-Objekte, Layer/Objekt/ByBlock), Namens-Zuordnung DE/EN, eigene Texturen per ZIP | ✅ | mit synthetischen DXF und präpariertem Testhaus geprüft; noch nicht mit einer echten AutoCAD-Datei mit Bibliotheksmaterialien |
+| SketchUp-Import (.skp 2013–heute, OpenSKP): Geometrie, Tags, Materialien, eingebettete Texturen mit SketchUp-UVs, auch auf der Website | ✅ | 69 von 74 OpenSKP-Testdateien lesbar; nicht lesbar: einige 2019/2020-Dateien mit eigenen Linienstilen → klare Meldung mit Abhilfe |
 | Materialwahl live (ohne Neuaufbau), Klick auf Fläche, Musterbilder | ✅ | |
 | VR-Brillen (WebXR): gehen mit Stick, 30°-Drehung, Kollision | ✅ | mit WebXR-Emulator (iwer, Quest 3) getestet, nicht an echter Brille |
 | GitHub-Veröffentlichung (Geräte-Anmeldung, inkrementell, Pages, Live-Prüfung) | ✅ simuliert · 🟡 echt | OAuth-App „ARCHVISTA“ (Device Flow) registriert; echte Testseite https://steinacher-designs.github.io/archvista-test/ nach 30 s online, alle Dateien korrekt unter Unterpfad, Desktop + Handy ohne Fehler. Der Veröffentlichen-Knopf selbst wird im Abschlusstest auf Windows geprüft. |

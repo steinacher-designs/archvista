@@ -117,7 +117,7 @@ export const TEMPLATES: { id: TemplateId; de: string; en: string; accent: string
 ];
 
 export function titleFromFile(name: string) {
-  const base = name.replace(/\.dxf$/i, "").replace(/[_\-.]+/g, " ").trim();
+  const base = name.replace(/\.(dxf|skp)$/i, "").replace(/[_\-.]+/g, " ").trim();
   return base ? base.charAt(0).toUpperCase() + base.slice(1) : "Mein Projekt";
 }
 

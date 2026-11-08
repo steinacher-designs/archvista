@@ -115,8 +115,8 @@ export const useStore = create<State>((set, get) => ({
       }
       return;
     }
-    if (!/\.dxf$/i.test(file.name)) {
-      set({ screen: "failed", error: { message: de ? "Bitte eine .dxf-Datei (oder ein ZIP mit DXF und Texturbildern) verwenden. DWG-Dateien bitte in AutoCAD mit _DXFOUT als DXF speichern." : "Please use a .dxf file (or a ZIP with DXF and texture images). Save DWG files as DXF in AutoCAD with _DXFOUT." } });
+    if (!/\.(dxf|skp)$/i.test(file.name)) {
+      set({ screen: "failed", error: { message: de ? "Bitte eine .dxf- oder .skp-Datei (oder ein ZIP mit DXF und Texturbildern) verwenden. DWG-Dateien bitte in AutoCAD mit _DXFOUT als DXF speichern." : "Please use a .dxf or .skp file (or a ZIP with DXF and texture images). Save DWG files as DXF in AutoCAD with _DXFOUT." } });
       return;
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -126,15 +126,18 @@ export const useStore = create<State>((set, get) => ({
   async openBytes(bytes, fileName, existing, images) {
     set({ screen: "processing", error: null, progress: { fraction: 0.01, label: "" }, dxf: bytes, fileName, startedAt: performance.now(), timings: {} });
     const hash = existing?.fileHash ?? (await sha256Hex(bytes));
-    const res = await runWorker({ type: "process", dxf: bytes.slice().buffer, unitsToMeters: existing?.unitsToMeters }, (f, label) => set({ progress: { fraction: f, label } }));
+    const format = /\.skp$/i.test(fileName) ? "skp" as const : "dxf" as const;
+    const res = await runWorker({ type: "process", dxf: bytes.slice().buffer, unitsToMeters: existing?.unitsToMeters, format }, (f, label) => set({ progress: { fraction: f, label } }));
     if (res.type === "error") { set({ screen: "failed", error: { message: res.message, detail: res.detail } }); return; }
     if (res.type !== "done") return;
     if (!res.model.ok) { set({ screen: "failed", model: res.model, error: { message: res.model.warnings[0]?.message ?? get().t.noGeometry, detail: res.model.warnings[0]?.detail } }); return; }
     // materials with own texture images (ZIP import), kept with the project for later sessions
     let customs = existing?.customMaterials;
-    if (images?.length) customs = await cadTextures(existing?.id ?? newProject(fileName, hash).id, res.model, images);
+    // images: from a ZIP, or embedded in a SketchUp file (those are re-read from the .skp every time)
+    const imgs = [...(images ?? []), ...(res.images ?? [])];
+    if (imgs.length && (images?.length || !existing?.customMaterials)) customs = await cadTextures(existing?.id ?? newProject(fileName, hash).id, res.model, imgs);
     applyCadTextures(res.scene, customs);
-    noteMissingTextures(res.model, customs, !!images?.length, get().lang);
+    if (format === "dxf") noteMissingTextures(res.model, customs, !!images?.length, get().lang);
     let project = existing ?? automatic({ ...newProject(fileName, hash), ...(customs?.length ? { customMaterials: customs } : {}) }, res.scene, res.model);
     project = { ...project, language: project.language ?? get().lang };
     set({ model: res.model, scene: res.scene, project, past: [], future: [], screen: "work", step: "customize", timings: res.timings });
@@ -200,8 +203,8 @@ async function cadTextures(projectId: string, model: ModelMeta, images: { name: 
     out.push({
       id: `img:${textureKey(cm.name).replace(/\./g, "_")}`, label: { de: cm.name, en: cm.name },
       color: cm.color !== undefined ? "#" + cm.color.toString(16).padStart(6, "0") : "#b9b9b9",
-      roughness: 0.8, metalness: 0, texture: "none", scale: cm.mapSize && cm.mapSize > 0.01 && cm.mapSize < 100 ? cm.mapSize : 1,
-      group: "cad", image: key, cadName: cm.name,
+      roughness: 0.8, metalness: 0, texture: "none", scale: !cm.sourceUv && cm.mapSize && cm.mapSize > 0.01 && cm.mapSize < 100 ? cm.mapSize : 1,
+      group: "cad", image: key, cadName: cm.name, ...(cm.sourceUv ? { sourceUv: true } : {}),
       ...(cm.opacity !== undefined ? { transmission: 1, opacity: cm.opacity } : {}),
     });
   }

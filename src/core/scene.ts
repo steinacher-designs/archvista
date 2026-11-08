@@ -20,6 +20,8 @@ export interface ScenePart {
   positions: Float32Array;
   normals: Float32Array;
   uvs: Float32Array;
+  /** Texture coordinates from the source program (SketchUp), used for its own textures. */
+  uvTex?: Float32Array;
   indices: Uint32Array;
   auto: Assignment;
 }
@@ -38,7 +40,7 @@ const SPLIT_ROLES: Category[] = ["floor", "ceiling", "terrace", "roof"];
 
 function subMesh(m: ModelMesh, tris: number[]): Omit<ModelMesh, "id" | "layer" | "color"> {
   const map = new Map<number, number>();
-  const pos: number[] = [], nrm: number[] = [];
+  const pos: number[] = [], nrm: number[] = [], uv: number[] = [];
   const idx = new Uint32Array(tris.length);
   tris.forEach((v, j) => {
     let n = map.get(v);
@@ -46,10 +48,11 @@ function subMesh(m: ModelMesh, tris: number[]): Omit<ModelMesh, "id" | "layer" |
       n = pos.length / 3; map.set(v, n);
       pos.push(m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2]);
       nrm.push(m.normals[v * 3], m.normals[v * 3 + 1], m.normals[v * 3 + 2]);
+      if (m.uvs) uv.push(m.uvs[v * 2], m.uvs[v * 2 + 1]);
     }
     idx[j] = n;
   });
-  return { positions: new Float32Array(pos), normals: new Float32Array(nrm), indices: idx, triangleCount: idx.length / 3 };
+  return { positions: new Float32Array(pos), normals: new Float32Array(nrm), indices: idx, triangleCount: idx.length / 3, ...(m.uvs ? { uvs: new Float32Array(uv) } : {}) };
 }
 
 /** Split a mesh into orientation groups. Returns [roleOrCategoryKey, triangle indices]. */
@@ -80,6 +83,7 @@ export function partition(meshes: ModelMesh[], cadMaterials: CadMaterial[] = [])
       ...(m.material ? { cadMaterial: m.material } : {}),
       positions: sub.positions, normals: sub.normals, indices: sub.indices,
       uvs: boxUVs(sub.positions, sub.normals),
+      ...(sub.uvs ? { uvTex: sub.uvs } : {}),
       auto: (cm && assignFromCad(cm, category)) || assignMaterial(m.layer, category, role, m.color),
     };
   };
