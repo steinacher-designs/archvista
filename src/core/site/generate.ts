@@ -20,6 +20,8 @@ export interface SiteInput {
   documents?: { doc: ProjectDocument; data: Uint8Array }[];
   /** Own texture images (from the CAD file's ZIP), by file name. */
   textures?: { name: string; data: Uint8Array }[];
+  /** The user's own panorama (environment "custom"). */
+  environmentFile?: { name: string; data: Uint8Array };
 }
 
 /** Safe, readable path segment (keeps German umlauts readable, removes everything risky). */
@@ -57,6 +59,12 @@ export function requiredAssets(config: PublicConfig, manifest: { textures: Recor
   const tex = (k: string) => { if (manifest.textures[k]) for (const s of ["col", "nor", "arm"]) out.add(`tex/${k}_${s}.webp`); };
   for (const [id, m] of Object.entries(config.materials)) tex(m.tex ?? id);
   const env = config.hasTerrain ? "studio" : config.environment;
+  // own panorama: the file itself ships separately (assets/env-user/); here only the chosen ground texture
+  if (env === "custom") {
+    const g = config.customEnv?.ground;
+    if (g && g !== "photo") tex(g === "paving" ? "env_paving" : g === "sand" ? "env_sand" : "grass");
+    return [...out];
+  }
   // photographic surroundings: one panorama + its HDR replace modelled terrain, plants and sky
   if (env !== "studio" && manifest.hdri[`env_${env}`]) {
     out.add(`hdri/env_${env}.hdr`); out.add(`hdri/env_${env}_bg.webp`);
@@ -172,6 +180,8 @@ export async function generateSite(input: SiteInput): Promise<FileMap> {
     const inSite = [...files.keys()].some((f) => f.includes(`/${kk}.`) || f.includes(`/${kk}_`));
     if (inSite) used[k] = v;
   }
+  // own surroundings (360° panorama)
+  if (pub.config.customEnv && input.environmentFile?.name === pub.config.customEnv.file) files.set(`assets/env-user/${input.environmentFile.name}`, input.environmentFile.data);
   // own texture images used by the published materials
   const usedImages = new Set(Object.values(pub.config.materials).map((m) => m.image).filter(Boolean) as string[]);
   for (const tx of input.textures ?? []) if (usedImages.has(tx.name)) files.set(`assets/tex-user/${tx.name}`, tx.data);

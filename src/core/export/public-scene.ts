@@ -1,7 +1,7 @@
 // ARCHVISTA — build the public, privacy-safe scene (GLB + JSON) that the website loads.
 
 import type { PreparedScene, ScenePart } from "../scene";
-import type { Project, Hotspot, Viewpoint, EnvironmentId, Quality, Lighting, Place } from "../project";
+import type { Project, Hotspot, Viewpoint, EnvironmentId, Quality, Lighting, Place, CustomEnvironment } from "../project";
 import { Zone, removeGreyGeometry, pointInZone } from "../zones";
 import { PRESET, MaterialPreset, withColour, setCustomPresets, resolvePreset } from "../materials";
 import { writeGlb } from "./glb";
@@ -14,6 +14,8 @@ export interface PublicConfig {
   version: 1;
   title: string;
   environment: EnvironmentId;
+  /** own surroundings (environment "custom"); the panorama file ships in assets/env-user/ */
+  customEnv?: Pick<CustomEnvironment, "file" | "kind" | "rotation" | "ground" | "height">;
   lighting: Lighting;
   quality: Quality;
   accent: string;
@@ -124,7 +126,10 @@ export function publicConfig(scene: PreparedScene, project: Project, usedPresets
 
   return {
     format: "archvista-scene", version: 1,
-    title: project.title, environment: project.environment, lighting: project.lighting ?? "afternoon", quality: project.quality, accent: project.accent, language: project.language,
+    title: project.title,
+    environment: project.environment === "custom" && !project.customEnv ? "studio" : project.environment,
+    ...(project.environment === "custom" && project.customEnv ? { customEnv: { file: project.customEnv.file, kind: project.customEnv.kind, rotation: project.customEnv.rotation, ground: project.customEnv.ground, ...(project.customEnv.height ? { height: project.customEnv.height } : {}) } } : {}),
+    lighting: project.lighting ?? "afternoon", quality: project.quality, accent: project.accent, language: project.language,
     bbox: scene.bbox, groundY: a.groundY,
     hasTerrain: scene.parts.some((p) => p.category === "terrain"),
     start: { position: start.position, yaw: start.yaw },

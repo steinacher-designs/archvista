@@ -51,6 +51,9 @@ export interface ViewerOptions {
   imageBase?: string;
   /** … or a resolver (desktop app: images are stored with the project). */
   resolveImage?: (name: string) => Promise<string | null>;
+  /** Own surroundings (panorama): base URL on websites, resolver in the desktop app. */
+  envBase?: string;
+  resolveEnv?: (file: string) => Promise<string | null>;
 }
 
 export interface BuildingPart { presetId: string; /** editor only: which model part this is (never published) */ key?: string; /** visible from the front only */ singleSided?: boolean; positions: Float32Array; normals: Float32Array; uvs: Float32Array; indices: Uint32Array | Uint16Array }
@@ -398,9 +401,9 @@ export class ArchViewer {
   }
 
   // ——— environment, lighting, quality ———
-  setEnvironment(id: EnvironmentId) {
+  setEnvironment(id: EnvironmentId, customEnv?: PublicConfig["customEnv"]) {
     if (!this.config) return;
-    this.config = { ...this.config, environment: id };
+    this.config = { ...this.config, environment: id, customEnv };
     this.applyEnvironment(id);
     this.rebuildCollider();
   }
@@ -454,14 +457,18 @@ export class ArchViewer {
     if (this.skybox) { this.scene.remove(this.skybox); this.skybox.geometry.dispose(); (this.skybox.material as Material).dispose(); this.skybox = null; }
     this.orbit.maxDistance = env.photo ? env.photo.radius * 0.7 : Infinity;
     // 2a) photographic surroundings: panorama on the ground + lighting from the same HDR
-    if (env.photo) this.lib.photoEnv(env.photo.key).then((ph) => {
+    const own = id === "custom" && !cfg.hasTerrain ? cfg.customEnv : undefined;
+    const photoSource = own ? this.customEnvSource(own) : env.photo ? this.lib.photoEnv(env.photo.key).then((x) => (x ? { ...x, hdrBackground: false } : null)) : null;
+    if (env.photo && photoSource) photoSource.then((ph) => {
       if (!ph || gen !== this.envGen || this.disposed) return;
       const h = ph.hdri;
-      const theta = (env.sunAzimuth * Math.PI) / 180 - Math.atan2(h.sunDir.x, h.sunDir.z);
-      const sky = new GroundedSkybox(ph.background, ph.cameraHeight, env.photo!.radius, 96);
+      // built-in panoramas: sun placed to light the front; own panoramas: as photographed, turned by the user
+      const theta = own ? (own.rotation * Math.PI) / 180 : (env.sunAzimuth * Math.PI) / 180 - Math.atan2(h.sunDir.x, h.sunDir.z);
+      const camH = own?.height ?? ph.cameraHeight;
+      const sky = new GroundedSkybox(ph.background, camH, env.photo!.radius, 96);
       const sm = sky.material as Material & { toneMapped: boolean; fog: boolean };
-      sm.toneMapped = false; sm.fog = false; // the panorama is already a finished photograph
-      sky.position.set(c[0], cfg.groundY + ph.cameraHeight - 0.01, c[1]);
+      sm.toneMapped = ph.hdrBackground; sm.fog = false; // a photo is already finished; HDR light values need tone mapping
+      sky.position.set(c[0], cfg.groundY + camH - 0.01, c[1]);
       sky.rotation.y = theta;
       this.skybox = sky;
       if (this.sky) { this.scene.remove(this.sky); this.sky = null; }
@@ -479,7 +486,8 @@ export class ArchViewer {
       this.sun.intensity = Math.min(3.4, 1.4 + Math.asin(dir.y) * 5);
       this.hemi.intensity = 0.03;
       this.fitShadow(dir);
-      void this.addGroundBlend(id, h.ground, gen);
+      const groundKey = own ? ({ photo: null, grass: "grass", paving: "env_paving", sand: "env_sand" } as const)[own.ground] : id === "urban" ? "env_paving" : id === "coastal" ? "env_sand" : "grass";
+      if (groundKey) void this.addGroundBlend(groundKey, h.ground, gen);
     });
     // 2b) real HDRI sky + matching sun, once loaded
     if (env.hdri) this.lib.hdri(env.hdri).then((h) => {
@@ -514,8 +522,7 @@ export class ArchViewer {
    * The ground of a projected panorama is smeared close to the camera. Around the building a sharp
    * photo-scanned ground (colour-matched to the panorama) fades softly into the photo.
    */
-  private async addGroundBlend(env: EnvironmentId, groundLinear: Color, gen: number) {
-    const key = env === "urban" ? "env_paving" : env === "coastal" ? "env_sand" : "grass";
+  private async addGroundBlend(key: string, groundLinear: Color, gen: number) {
     const ph = await this.lib.photo(key);
     if (!ph || gen !== this.envGen || !this.envGroup || !this.config) return;
     const b = this.config.bbox;
@@ -542,6 +549,12 @@ export class ArchViewer {
     disc.renderOrder = 1;
     this.envGroup.add(disc);
     this.envGroup.traverse((o) => { if ((o as Mesh).material instanceof ShadowMaterial) o.renderOrder = 2; });
+  }
+
+  /** Own panorama: where the file is (app: stored with the project; website: assets/env-user/). */
+  private async customEnvSource(own: NonNullable<PublicConfig["customEnv"]>) {
+    const url = this.opts.resolveEnv ? await this.opts.resolveEnv(own.file) : `${this.opts.envBase ?? "assets/env-user/"}${encodeURIComponent(own.file)}`;
+    return url ? this.lib.customEnv(url, own.kind) : null;
   }
 
   /** Warm interior lights for evening scenes (rooms from the analysis, never in restricted areas). */

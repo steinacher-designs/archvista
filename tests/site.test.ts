@@ -168,3 +168,30 @@ describe("v1.1: documents, places, storey names, materials", () => {
     expect(Object.keys(cfg.materials)).toContain("marble_white~#ff0000");
   });
 });
+
+describe("own surroundings (360° panorama)", () => {
+  const ce = { file: "mein_platz.hdr", kind: "hdr" as const, name: "Mein Platz.hdr", size: 3, rotation: 90, ground: "paving" as const };
+
+  it("goes into the website config and ships the panorama + chosen ground", async () => {
+    const project = newProject("house_mm.dxf", "abc");
+    project.environment = "custom"; project.customEnv = ce;
+    const pub = buildPublicScene(scene, project);
+    expect(pub.config.environment).toBe("custom");
+    expect(pub.config.customEnv).toEqual({ file: "mein_platz.hdr", kind: "hdr", rotation: 90, ground: "paving" });
+    expect(JSON.stringify(pub.config)).not.toContain("Mein Platz"); // only what the viewer needs
+    const files = await generateSite({ project, scene, pub, runtime, readAsset, environmentFile: { name: "mein_platz.hdr", data: new Uint8Array([1, 2, 3]) } });
+    expect(files.get("assets/env-user/mein_platz.hdr")).toEqual(new Uint8Array([1, 2, 3]));
+    const keys = [...files.keys()];
+    expect(keys.some((k) => k.includes("/hdri/"))).toBe(false); // no built-in panorama needed
+    expect(keys).toContain("assets/lib/tex/env_paving_col.webp");
+  });
+
+  it("falls back to the studio when the panorama is missing, and ships nothing extra for 'photo only'", async () => {
+    const p1 = newProject("house_mm.dxf", "abc"); p1.environment = "custom";
+    expect(buildPublicScene(scene, p1).config.environment).toBe("studio");
+    const p2 = newProject("house_mm.dxf", "abc"); p2.environment = "custom"; p2.customEnv = { ...ce, ground: "photo" };
+    const pub = buildPublicScene(scene, p2);
+    const files = await generateSite({ project: p2, scene, pub, runtime, readAsset });
+    expect([...files.keys()].some((k) => k.includes("/tex/env_") || k.includes("/tex/grass"))).toBe(false);
+  });
+});

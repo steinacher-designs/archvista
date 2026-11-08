@@ -24,6 +24,7 @@ export class AssetLibrary {
   private manifest: Manifest | null = null;
   private tex = new Map<string, Promise<PhotoMaps | null>>();
   private hdr = new Map<string, Promise<HdriInfo | null>>();
+  private custom = new Map<string, Promise<{ hdri: HdriInfo; background: Texture; cameraHeight: number; hdrBackground: boolean } | null>>();
   private models = new Map<string, Promise<ModelAsset | null>>();
   private ready: Promise<void>;
   private inflight = 0;
@@ -43,6 +44,33 @@ export class AssetLibrary {
     return !!this.manifest[kind]?.[key];
   }
   whenReady() { return this.ready; }
+
+  /**
+   * The user's own surroundings from a 360° panorama: HDR/EXR (true light) or a normal photo (JPG/PNG/WebP).
+   * Returns the same shape as photoEnv; `hdrBackground` = the background is linear HDR (needs tone mapping).
+   */
+  customEnv(url: string, kind: "hdr" | "exr" | "image"): Promise<{ hdri: HdriInfo; background: Texture; cameraHeight: number; hdrBackground: boolean } | null> {
+    let p = this.custom.get(url);
+    if (!p) {
+      p = this.track((async () => {
+        try {
+          if (kind === "hdr" || kind === "exr") {
+            const loader = kind === "hdr" ? new HDRLoader() : new (await import("three/examples/jsm/loaders/EXRLoader.js")).EXRLoader();
+            const t = (await loader.setDataType(FloatType).loadAsync(url)) as DataTexture;
+            t.mapping = EquirectangularReflectionMapping;
+            return { hdri: { texture: t, ...analyseHdri(t) }, background: t, cameraHeight: 1.7, hdrBackground: true };
+          }
+          const bg = await new TextureLoader().loadAsync(url);
+          bg.colorSpace = SRGBColorSpace; bg.mapping = EquirectangularReflectionMapping; bg.anisotropy = 8;
+          const light = pseudoHdr(bg.image as CanvasImageSource & { width: number; height: number });
+          if (!light) return null;
+          return { hdri: { texture: light, ...analyseHdri(light) }, background: bg, cameraHeight: 1.7, hdrBackground: false };
+        } catch (e) { console.warn("[archvista] eigene Umgebung nicht geladen:", url, e); return null; }
+      })());
+      this.custom.set(url, p);
+    }
+    return p;
+  }
 
   /** Photographic surroundings: HDR for lighting + high-resolution panorama for display. */
   photoEnv(key: string): Promise<{ hdri: HdriInfo; background: Texture; cameraHeight: number } | null> {
@@ -168,6 +196,30 @@ export function analyseHdri(t: DataTexture): { sunDir: Vector3; sunColor: Color;
   const phi = (u - 0.5) * Math.PI * 2, el = (v - 0.5) * Math.PI;
   const sunDir = new Vector3(Math.cos(phi) * Math.cos(el), Math.sin(el), Math.sin(phi) * Math.cos(el)).normalize();
   return { sunDir, sunColor, horizon: norm(hz), zenith: norm(zn), ground: new Color(gr[0] / 4, gr[1] / 4, gr[2] / 4) };
+}
+
+/**
+ * A normal (8-bit) panorama has no real light values. Make a small linear float copy for image-based lighting and
+ * sun detection; burnt-out highlights (the sun, bright sky) are lifted so the light still has direction.
+ */
+function pseudoHdr(img: CanvasImageSource & { width: number; height: number }): DataTexture | null {
+  const W = 1024, H = 512;
+  const cv: HTMLCanvasElement | OffscreenCanvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(W, H) : Object.assign(document.createElement("canvas"), { width: W, height: H });
+  const ctx = cv.getContext("2d") as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, W, H);
+  const src = ctx.getImageData(0, 0, W, H).data;
+  const out = new Float32Array(W * H * 4);
+  const lin = (v: number) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  for (let i = 0; i < W * H; i++) {
+    const r = lin(src[i * 4]), g = lin(src[i * 4 + 1]), b = lin(src[i * 4 + 2]);
+    const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const k = l > 0.9 ? 1 + (l - 0.9) * 60 : 1; // up to ×7 for clipped highlights
+    out[i * 4] = r * k; out[i * 4 + 1] = g * k; out[i * 4 + 2] = b * k; out[i * 4 + 3] = 1;
+  }
+  const t = new DataTexture(out, W, H, undefined, FloatType);
+  t.colorSpace = LinearSRGBColorSpace; t.mapping = EquirectangularReflectionMapping; t.needsUpdate = true;
+  return t;
 }
 
 /** Quantized (KHR_mesh_quantization) attributes must become float before transforming, or they clamp. */

@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getViewer } from "../useViewer";
 import { useStore, type Tab, presetLabel } from "../store";
 import { ENVIRONMENTS, TEMPLATES, type Lighting, type Quality, type EnvironmentId, type TemplateId } from "../../core/project";
-import { PRESETS, PRESET, GROUP_LABEL, customPresets, setCustomPresets, type MaterialGroup, type MaterialPreset } from "../../core/materials";
-import { textureUrl } from "../textures";
+import { PRESETS, PRESET, GROUP_LABEL, customPresets, setCustomPresets, textureKey, type MaterialGroup, type MaterialPreset } from "../../core/materials";
+import { textureUrl, envUrl, saveEnv } from "../textures";
 import { CATEGORY_LABEL } from "../../core/analysis/classify";
 import { UNIT_CHOICES } from "../../core/dxf/import";
 import { AreasEditor } from "./Areas";
@@ -34,21 +34,109 @@ export function CustomizePanel(props: { onPlaceHotspot(): void; selectedHotspot:
 }
 
 function Environment() {
-  const { t, project, update, scene } = useStore();
-  const d: Record<EnvironmentId, [string, string]> = { urban: [t.envUrban, t.envUrbanD], forest: [t.envForest, t.envForestD], coastal: [t.envCoastal, t.envCoastalD], studio: [t.envStudio, t.envStudioD] };
+  const { t, project, update, scene, lang } = useStore();
+  const de = lang === "de";
+  const d: Record<Exclude<EnvironmentId, "custom">, [string, string]> = { urban: [t.envUrban, t.envUrbanD], forest: [t.envForest, t.envForestD], coastal: [t.envCoastal, t.envCoastalD], studio: [t.envStudio, t.envStudioD] };
   const terrain = scene?.parts.some((p) => p.category === "terrain");
   return (
     <>
-      {terrain && <div className="note">{useStore.getState().lang === "de" ? "Ihr Modell enthält eigenes Gelände – die Umgebung bleibt deshalb neutral." : "Your model contains its own terrain, so the surroundings stay neutral."}</div>}
+      {terrain && <div className="note">{de ? "Ihr Modell enthält eigenes Gelände – die Umgebung bleibt deshalb neutral." : "Your model contains its own terrain, so the surroundings stay neutral."}</div>}
       <div className="tiles">
         {ENVIRONMENTS.map((e) => (
           <button key={e.id} className={`tile ${project!.environment === e.id ? "on" : ""}`} onClick={() => update((p) => { p.environment = e.id; })} data-testid={`env-${e.id}`}>
             <div className={`pv ${e.id}`} style={e.id !== "studio" ? { background: `url(/assets-lib/hdri/env_${e.id}_thumb.webp) center/cover, var(--line)` } : undefined} />
-            <div className="tx"><b>{d[e.id][0]}</b><small>{d[e.id][1]}</small></div>
+            <div className="tx"><b>{d[e.id as Exclude<EnvironmentId, "custom">][0]}</b><small>{d[e.id as Exclude<EnvironmentId, "custom">][1]}</small></div>
           </button>
         ))}
+        <CustomEnvTile />
       </div>
     </>
+  );
+}
+
+/** Own surroundings: a 360° panorama the user loads (HDR / EXR / JPG / PNG / WebP). */
+function CustomEnvTile() {
+  const { project, update, lang } = useStore();
+  const de = lang === "de";
+  const ce = project!.customEnv;
+  const input = useRef<HTMLInputElement>(null);
+  const [thumb, setThumb] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; warn?: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    if (ce?.kind === "image") void envUrl(project!.id, ce.file).then((u) => { if (alive) setThumb(u); });
+    else setThumb(null);
+    return () => { alive = false; };
+  }, [ce?.file]);
+  const pick = async (f: File | undefined) => {
+    if (!f) return;
+    setMsg(null);
+    const ext = (f.name.split(".").pop() ?? "").toLowerCase();
+    const kind = ext === "hdr" ? "hdr" : ext === "exr" ? "exr" : /^(jpe?g|png|webp)$/.test(ext) ? "image" : null;
+    if (!kind) { setMsg({ text: de ? "Bitte ein 360°-Panorama als .hdr, .exr, .jpg, .png oder .webp wählen." : "Please choose a 360° panorama as .hdr, .exr, .jpg, .png or .webp.", warn: true }); return; }
+    if (f.size > 80e6) { setMsg({ text: de ? "Die Datei ist größer als 80 MB. Bitte eine kleinere Auflösung wählen (z. B. 4K statt 8K)." : "The file is larger than 80 MB. Please use a smaller resolution (e.g. 4K instead of 8K).", warn: true }); return; }
+    setBusy(true);
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      const head = new TextDecoder("latin1").decode(bytes.subarray(0, 10));
+      if (kind === "hdr" && !/^#\?(RADIANCE|RGBE)/.test(head)) throw new Error(de ? "Das ist keine gültige HDR-Datei." : "This is not a valid HDR file.");
+      if (kind === "exr" && !(bytes[0] === 0x76 && bytes[1] === 0x2f && bytes[2] === 0x31 && bytes[3] === 0x01)) throw new Error(de ? "Das ist keine gültige EXR-Datei." : "This is not a valid EXR file.");
+      const notes: string[] = [];
+      if (kind === "image") {
+        const bm = await createImageBitmap(new Blob([bytes as BlobPart]));
+        const r = bm.width / bm.height; bm.close?.();
+        if (r < 1.8 || r > 2.2) notes.push(de ? `Das Bild ist kein 360°-Panorama (Seitenverhältnis ${r.toFixed(2)}:1 statt 2:1) und wirkt deshalb verzerrt.` : `The image is not a 360° panorama (aspect ${r.toFixed(2)}:1 instead of 2:1), so it will look distorted.`);
+        notes.push(de ? "Tipp: Mit einer HDR-Datei wirken Licht und Schatten echter." : "Tip: with an HDR file, light and shadows look more real.");
+      }
+      if (f.size > 25e6) notes.push(de ? `Die Website wird dadurch um ${(f.size / 1e6).toFixed(0)} MB größer und lädt langsamer – eine kleinere Auflösung (2K–4K) reicht meist.` : `This adds ${(f.size / 1e6).toFixed(0)} MB to the website, which loads more slowly – 2K–4K is usually enough.`);
+      const file = textureKey(f.name);
+      await saveEnv(project!.id, file, bytes);
+      update((p) => { p.customEnv = { file, kind, name: f.name, size: f.size, rotation: p.customEnv?.rotation ?? 0, ground: p.customEnv?.ground ?? "photo" }; p.environment = "custom"; });
+      setMsg(notes.length ? { text: notes.join(" "), warn: notes.length > 1 || f.size > 25e6 } : null);
+    } catch (e) {
+      setMsg({ text: (e as Error).message || (de ? "Die Datei konnte nicht gelesen werden." : "Could not read the file."), warn: true });
+    } finally { setBusy(false); }
+  };
+  const on = project!.environment === "custom" && !!ce;
+  return (
+    <>
+      <button className={`tile ${on ? "on" : ""}`} onClick={() => (ce ? update((p) => { p.environment = "custom"; }) : input.current?.click())} data-testid="env-custom">
+        <div className="pv custom" style={thumb ? { background: `url(${thumb}) center/cover` } : undefined}>
+          {!thumb && <span className="pv-plus">{busy ? "…" : ce ? "HDR" : "+"}</span>}
+        </div>
+        <div className="tx"><b>{de ? "Eigene Umgebung" : "Own surroundings"}</b><small>{ce ? ce.name : de ? "360°-Panorama laden" : "Load a 360° panorama"}</small></div>
+      </button>
+      <input ref={input} type="file" accept=".hdr,.exr,.jpg,.jpeg,.png,.webp" hidden onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} data-testid="env-custom-file" />
+      {msg && <div className={`note ${msg.warn ? "warn" : ""}`} style={{ gridColumn: "1 / -1" }} data-testid="env-custom-msg">{msg.text}</div>}
+      {on && <CustomEnvControls onReplace={() => input.current?.click()} />}
+    </>
+  );
+}
+
+function CustomEnvControls({ onReplace }: { onReplace(): void }) {
+  const { project, update, lang } = useStore();
+  const de = lang === "de";
+  const ce = project!.customEnv!;
+  const grounds: [NonNullable<typeof ce>["ground"], string][] = [["photo", de ? "Nur Foto" : "Photo only"], ["grass", de ? "Wiese" : "Grass"], ["paving", de ? "Pflaster" : "Paving"], ["sand", "Sand"]];
+  return (
+    <div className="envctl" style={{ gridColumn: "1 / -1" }}>
+      <div className="field">
+        <label>{de ? "Drehen" : "Rotate"} <span className="val">{Math.round(ce.rotation)}°</span></label>
+        <input type="range" min={0} max={359} step={1} value={ce.rotation} onChange={(e) => update((p) => { p.customEnv!.rotation = +e.target.value; }, { coalesce: "env-rot" })} data-testid="env-rotate" />
+        <small>{de ? "Dreht das Panorama um das Gebäude – Sonne und Schatten drehen mit." : "Turns the panorama around the building – sun and shadows follow."}</small>
+      </div>
+      <div className="field">
+        <label>{de ? "Boden um das Gebäude" : "Ground around the building"}</label>
+        <div className="chips">{grounds.map(([id, l]) => <button key={id} className={ce.ground === id ? "on" : ""} onClick={() => update((p) => { p.customEnv!.ground = id; })}>{l}</button>)}</div>
+        <small>{de ? "Nahe am Gebäude ist ein Panorama-Boden oft unscharf – ein echter Boden blendet weich in das Foto über." : "Close to the building a panorama ground is often blurry – a real ground blends softly into the photo."}</small>
+      </div>
+      <div className="row-actions">
+        <button className="btn small ghost" onClick={onReplace}>{de ? "Anderes Panorama…" : "Other panorama…"}</button>
+        <button className="btn small ghost" onClick={() => update((p) => { p.customEnv = undefined; p.environment = "forest"; })}>{de ? "Entfernen" : "Remove"}</button>
+      </div>
+      <p className="note">{de ? "Woher? Kostenlose HDR-Panoramen gibt es z. B. auf polyhaven.com (2K oder 4K genügt). Eigene 360°-Fotos gehen auch – etwa von einer 360°-Kamera oder einer Panorama-App." : "Where from? Free HDR panoramas e.g. on polyhaven.com (2K or 4K is enough). Your own 360° photos work too – from a 360° camera or a panorama app."}</p>
+    </div>
   );
 }
 

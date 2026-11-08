@@ -242,3 +242,12 @@ button { cursor: pointer; }
 .guide ol { margin: 10px 0 8px; padding-left: 20px; line-height: 1.6; } .guide li { margin-bottom: 6px; }
 .guide code { font-size: 11.5px; background: var(--soft2); border-radius: 5px; padding: 1px 5px; word-break: break-all; }
 .guide p { margin: 0; color: var(--ink3); }
+
+/* —— own surroundings —— */
+.pv.custom { display: grid; place-items: center; background: linear-gradient(180deg, #c9d3e6 0 50%, #aeb3a2 50%); }
+.pv-plus { font-size: 26px; font-weight: 300; color: var(--mozart); background: rgba(255,255,255,.75); border-radius: 999px; min-width: 44px; height: 44px; display: grid; place-items: center; padding: 0 10px; font-weight: 600; font-size: 14px; }
+.envctl { background: var(--soft); border-radius: 14px; padding: 4px 14px 12px; }
+.envctl input[type=range] { width: 100%; accent-color: var(--brand); }
+.envctl .val { float: right; font-weight: 500; color: var(--ink3); }
+.envctl .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.envctl .note { background: #fff; }

@@ -6,7 +6,7 @@ import type { PreparedScene } from "../core/scene";
 import type { Project, Hotspot } from "../core/project";
 import { resolvePreset, setCustomPresets, type MaterialPreset } from "../core/materials";
 import { useStore } from "./store";
-import { textureUrl } from "./textures";
+import { textureUrl, envUrl } from "./textures";
 
 let current: ArchViewer | null = null;
 export const getViewer = () => current;
@@ -24,6 +24,7 @@ export function useViewer(host: React.RefObject<HTMLDivElement | null>, scene: P
       language: opts.lang, assetBase: "/assets-lib/", preserveDrawingBuffer: true,
       onHotspot: (h) => hsRef.current?.(h),
       resolveImage: async (name) => { const id = useStore.getState().project?.id; return id ? textureUrl(id, name) : null; },
+      resolveEnv: async (file) => { const id = useStore.getState().project?.id; return id ? envUrl(id, file) : null; },
     });
     const cap = localStorage.getItem("av-maxfps"); if (cap !== null) v.maxFps = Number(cap);
     viewer.current = v; current = v;
@@ -80,7 +81,12 @@ export function useViewer(host: React.RefObject<HTMLDivElement | null>, scene: P
   }, [matKey]);
 
   // light-weight updates
-  useEffect(() => { if (project) viewer.current?.setEnvironment(project.environment); }, [project?.environment]);
+  const envKey = project ? JSON.stringify([project.environment, project.environment === "custom" ? project.customEnv ?? null : null]) : "";
+  useEffect(() => {
+    if (!project) return;
+    const ce = project.environment === "custom" && project.customEnv ? project.customEnv : undefined;
+    viewer.current?.setEnvironment(ce ? "custom" : project.environment === "custom" ? "studio" : project.environment, ce);
+  }, [envKey]);
   useEffect(() => { if (project) viewer.current?.setLighting(project.lighting); }, [project?.lighting]);
   useEffect(() => { if (project) viewer.current?.setQuality(project.quality); }, [project?.quality]);
   const redKey = project ? JSON.stringify(project.zones.filter((z) => z.kind === "red")) : "";

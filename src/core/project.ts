@@ -3,7 +3,23 @@ import type { MaterialPreset } from "./materials";
 
 import type { Zone } from "./zones";
 
-export type EnvironmentId = "urban" | "forest" | "coastal" | "studio";
+export type EnvironmentId = "urban" | "forest" | "coastal" | "studio" | "custom";
+
+/** The user's own surroundings: a 360° panorama (HDR/EXR or a JPG/PNG/WebP photo). */
+export interface CustomEnvironment {
+  /** storage key / file name on the website (letters, digits, - _ .) */
+  file: string;
+  kind: "hdr" | "exr" | "image";
+  /** original file name, shown in the app */
+  name: string;
+  size: number;
+  /** turn the panorama around the building, degrees */
+  rotation: number;
+  /** sharp ground around the building, blended into the photo ("photo" = only the panorama) */
+  ground: "photo" | "grass" | "paving" | "sand";
+  /** how high the panorama was taken, metres (default 1.7) */
+  height?: number;
+}
 export type TemplateId = "minimal" | "dark-luxury" | "swiss" | "portfolio" | "nature" | "cinema" | "monograph" | "blueprint" | "studio" | "beton";
 export type Quality = "auto" | "performance" | "balanced" | "ultra";
 export type Lighting = "day" | "afternoon" | "evening";
@@ -69,6 +85,8 @@ export interface Project {
   accent: string;
   template: TemplateId;
   environment: EnvironmentId;
+  /** set when the user loaded own surroundings (environment "custom") */
+  customEnv?: CustomEnvironment;
   lighting: Lighting;
   quality: Quality;
   language: "de" | "en";

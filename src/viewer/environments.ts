@@ -444,6 +444,7 @@ function photo(ctx: EnvContext, key: string): EnvResult {
 }
 
 export function buildEnvironment(id: EnvironmentId, ctx: EnvContext): EnvResult {
+  if (id === "custom") return photo(ctx, "custom"); // the viewer loads the user's panorama itself
   if (id !== "studio" && ctx.lib.hasSync("hdri", `env_${id}`)) return photo(ctx, `env_${id}`);
   switch (id) {
     case "forest": return forest(ctx);
