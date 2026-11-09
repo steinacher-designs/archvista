@@ -2,7 +2,7 @@
 // Every loader degrades gracefully: if an asset is missing (offline/old export) the procedural fallback is used.
 
 import {
-  BufferGeometry, Color, DataTexture, Float32BufferAttribute, EquirectangularReflectionMapping, FloatType, LinearSRGBColorSpace, Material, Mesh,
+  BufferGeometry, Color, DataTexture, DataUtils, Float32BufferAttribute, EquirectangularReflectionMapping, HalfFloatType, LinearSRGBColorSpace, Material, Mesh,
   MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, Texture, TextureLoader, Vector3, Matrix4,
 } from "three";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
@@ -56,7 +56,7 @@ export class AssetLibrary {
         try {
           if (kind === "hdr" || kind === "exr") {
             const loader = kind === "hdr" ? new HDRLoader() : new (await import("three/examples/jsm/loaders/EXRLoader.js")).EXRLoader();
-            const t = (await loader.setDataType(FloatType).loadAsync(url)) as DataTexture;
+            const t = (await loader.setDataType(HalfFloatType).loadAsync(url)) as DataTexture; // 16-bit: works on iPhones too
             t.mapping = EquirectangularReflectionMapping;
             return { hdri: { texture: t, ...analyseHdri(t) }, background: t, cameraHeight: 1.7, hdrBackground: true };
           }
@@ -116,7 +116,7 @@ export class AssetLibrary {
       p = (async () => {
         if (!(await this.has("hdri", key))) return null;
         try {
-          const t = await new HDRLoader().setDataType(FloatType).loadAsync(`${this.base}hdri/${key}.hdr`);
+          const t = await new HDRLoader().setDataType(HalfFloatType).loadAsync(`${this.base}hdri/${key}.hdr`); // 16-bit: works on iPhones too
           t.mapping = EquirectangularReflectionMapping;
           return { texture: t, ...analyseHdri(t) };
         } catch { return null; }
@@ -164,7 +164,9 @@ export class AssetLibrary {
  */
 export function analyseHdri(t: DataTexture): { sunDir: Vector3; sunColor: Color; horizon: Color; zenith: Color; ground: Color } {
   const { width: W, height: H } = t.image as { width: number; height: number };
-  const d = t.image.data as unknown as Float32Array;
+  // 16-bit float data (Uint16Array) is read through a float copy
+  const raw = t.image.data as unknown as Float32Array | Uint16Array;
+  const d: ArrayLike<number> = raw instanceof Uint16Array ? Float32Array.from(raw, (v) => DataUtils.fromHalfFloat(v)) : raw;
   const ch = d.length / (W * H);
   let best = -1, bx = 0, by = 0;
   for (let y = 0; y < H / 2; y++)
@@ -209,15 +211,16 @@ function pseudoHdr(img: CanvasImageSource & { width: number; height: number }): 
   if (!ctx) return null;
   ctx.drawImage(img, 0, 0, W, H);
   const src = ctx.getImageData(0, 0, W, H).data;
-  const out = new Float32Array(W * H * 4);
+  const out = new Uint16Array(W * H * 4);
+  const h = (v: number) => DataUtils.toHalfFloat(Math.min(v, 65000));
   const lin = (v: number) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
   for (let i = 0; i < W * H; i++) {
     const r = lin(src[i * 4]), g = lin(src[i * 4 + 1]), b = lin(src[i * 4 + 2]);
     const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
     const k = l > 0.9 ? 1 + (l - 0.9) * 60 : 1; // up to ×7 for clipped highlights
-    out[i * 4] = r * k; out[i * 4 + 1] = g * k; out[i * 4 + 2] = b * k; out[i * 4 + 3] = 1;
+    out[i * 4] = h(r * k); out[i * 4 + 1] = h(g * k); out[i * 4 + 2] = h(b * k); out[i * 4 + 3] = h(1);
   }
-  const t = new DataTexture(out, W, H, undefined, FloatType);
+  const t = new DataTexture(out, W, H, undefined, HalfFloatType);
   t.colorSpace = LinearSRGBColorSpace; t.mapping = EquirectangularReflectionMapping; t.needsUpdate = true;
   return t;
 }
