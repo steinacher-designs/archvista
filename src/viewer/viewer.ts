@@ -3,7 +3,7 @@
 import {
   NeutralToneMapping, Box3, BufferAttribute, BufferGeometry, Timer, Color, DirectionalLight, Fog, Group, HalfFloatType, WebGLRenderTarget,
   HemisphereLight, Material, Mesh, MeshPhysicalMaterial, Object3D, PCFShadowMap, PerspectiveCamera, Plane,
-  PMREMGenerator, Raycaster, Scene, SRGBColorSpace, Texture, Vector2, Vector3, WebGLRenderer, DoubleSide, FrontSide,
+  PMREMGenerator, Raycaster, Scene, SRGBColorSpace, Texture, Vector2, Vector3, WebGLRenderer, DoubleSide, FrontSide, Ray,
 } from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
@@ -1080,7 +1080,6 @@ export class ArchViewer {
       <div class="av-bar">
         <button data-a="walk" class="av-b">${L("walk")}</button>
         <button data-a="orbit" class="av-b">${L("orbit")}</button>
-        ${this.config!.tour && this.config!.viewpoints.length > 1 ? `<button data-a="tour" class="av-b">${L("tour")}</button>` : ""}
         <span class="av-sep"></span>
         <button data-a="quality" class="av-b av-q" title="${L("quality")}"></button>
         <button data-a="fs" class="av-b" title="${L("fullscreen")}" aria-label="${L("fullscreen")}">⤢</button>
@@ -1283,17 +1282,41 @@ export class ArchViewer {
   /** Jump to a user-defined place (walk places start first-person, others fly the orbit camera). */
   goToPlace(p: { position: [number, number, number]; target: [number, number, number]; walk: boolean; name: string; id: string }) {
     if (this.insideBarrier(new Vector3(...p.position))) return;
-    if (p.walk && this.walker) {
+    // walking (or a place inside the building): stand right there on the floor, looking the same way.
+    // Places saved while looking around count too — that is how you get into a closed house.
+    const spot = this.walker ? this.standSpot(p.position) : null;
+    if (this.walker && spot && (p.walk || this.mode === "walk" || spot.indoors)) {
       this.stopTour();
+      this.clipLevel(null);
       const yaw = Math.atan2(-(p.target[0] - p.position[0]), -(p.target[2] - p.position[2]));
       this.setMode("walk");
-      this.walker.teleport(new Vector3(p.position[0], p.position[1] - DEFAULT_WALKER.eye, p.position[2]), yaw);
+      this.walker.teleport(spot.feet, yaw);
       const d = new Vector3(...p.target).sub(new Vector3(...p.position));
-      this.walker.pitch = Math.max(-1.2, Math.min(1.2, Math.atan2(d.y, Math.hypot(d.x, d.z))));
+      const pitch = Math.atan2(d.y, Math.hypot(d.x, d.z));
+      this.walker.pitch = p.walk ? Math.max(-1.2, Math.min(1.2, pitch)) : Math.max(-0.25, Math.min(0.25, pitch)); // views aimed at the house centre: keep the head level
+      this.invalidate(8);
       return;
     }
+    if (this.mode === "walk") this.setMode("orbit"); // a bird's-eye view: fly there
     this.clipLevel(null);
     this.goTo({ id: p.id, name: p.name, position: p.position, target: p.target });
+  }
+
+  /**
+   * Where a person would stand for a camera position: the floor just below it (up to 3 m — a view from high
+   * above is not a standing spot). `indoors` = there is a ceiling above, i.e. the place is inside the building.
+   */
+  private standSpot(pos: [number, number, number]): { feet: Vector3; indoors: boolean } | null {
+    const bvh = this.walker?.bvh;
+    if (!bvh) return null;
+    const ray = new Ray(new Vector3(pos[0], pos[1] + 0.2, pos[2]), new Vector3(0, -1, 0));
+    const down = bvh.raycastFirst(ray, DoubleSide);
+    if (!down || down.distance > 3.2) return null;
+    const feet = down.point.clone();
+    feet.y += 0.02;
+    ray.origin.set(pos[0], feet.y + 1.0, pos[2]); ray.direction.set(0, 1, 0);
+    const up = bvh.raycastFirst(ray, DoubleSide);
+    return { feet, indoors: !!up && up.distance < 6 };
   }
 
   /** Current camera view, for saving it as a place in the editor. */

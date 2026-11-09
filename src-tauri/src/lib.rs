@@ -236,7 +236,7 @@ struct StartupFile {
 
 #[tauri::command]
 fn startup_file() -> Option<StartupFile> {
-    let path = std::env::args().skip(1).find(|a| { let l = a.to_lowercase(); l.ends_with(".dxf") || l.ends_with(".skp") })?;
+    let path = std::env::args().skip(1).find(|a| { let l = a.to_lowercase(); l.ends_with(".dxf") || l.ends_with(".skp") || l.ends_with(".3ds") })?;
     let p = PathBuf::from(&path);
     let bytes = fs::read(&p).ok()?;
     Some(StartupFile { name: p.file_name()?.to_string_lossy().to_string(), bytes })

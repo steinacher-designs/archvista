@@ -104,19 +104,19 @@ export const useStore = create<State>((set, get) => ({
     if (/\.zip$/i.test(file.name)) {
       // DXF + texture images in one ZIP
       try {
-        const keep = (n: string) => !n.startsWith("__MACOSX/") && /\.(dxf|jpe?g|png|webp)$/i.test(n);
+        const keep = (n: string) => !n.startsWith("__MACOSX/") && /\.(dxf|3ds|jpe?g|png|webp)$/i.test(n);
         const entries = await unzip(new Uint8Array(await file.arrayBuffer()), keep);
-        const dxfs = entries.filter((e) => /\.dxf$/i.test(e.name)).sort((a, b) => b.data.length - a.data.length);
-        if (!dxfs.length) { set({ screen: "failed", error: { message: de ? "Im ZIP wurde keine .dxf-Datei gefunden." : "No .dxf file found in the ZIP." } }); return; }
-        const images = entries.filter((e) => !/\.dxf$/i.test(e.name)).map((e) => ({ name: baseName(e.name), data: e.data }));
+        const dxfs = entries.filter((e) => /\.(dxf|3ds)$/i.test(e.name)).sort((a, b) => b.data.length - a.data.length);
+        if (!dxfs.length) { set({ screen: "failed", error: { message: de ? "Im ZIP wurde keine .dxf- oder .3ds-Datei gefunden." : "No .dxf or .3ds file found in the ZIP." } }); return; }
+        const images = entries.filter((e) => !/\.(dxf|3ds)$/i.test(e.name)).map((e) => ({ name: baseName(e.name), data: e.data }));
         await get().openBytes(dxfs[0].data, baseName(dxfs[0].name), undefined, images);
       } catch (err) {
         set({ screen: "failed", error: { message: err instanceof ZipError ? err.message : (de ? "Das ZIP konnte nicht gelesen werden." : "Could not read the ZIP.") } });
       }
       return;
     }
-    if (!/\.(dxf|skp)$/i.test(file.name)) {
-      set({ screen: "failed", error: { message: de ? "Bitte eine .dxf- oder .skp-Datei (oder ein ZIP mit DXF und Texturbildern) verwenden. DWG-Dateien bitte in AutoCAD mit _DXFOUT als DXF speichern." : "Please use a .dxf or .skp file (or a ZIP with DXF and texture images). Save DWG files as DXF in AutoCAD with _DXFOUT." } });
+    if (!/\.(dxf|skp|3ds)$/i.test(file.name)) {
+      set({ screen: "failed", error: { message: de ? "Bitte eine .dxf-, .skp- oder .3ds-Datei (oder ein ZIP mit Modell und Texturbildern) verwenden. DWG-Dateien bitte in AutoCAD mit _DXFOUT als DXF speichern." : "Please use a .dxf, .skp or .3ds file (or a ZIP with the model and texture images). Save DWG files as DXF in AutoCAD with _DXFOUT." } });
       return;
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -126,7 +126,7 @@ export const useStore = create<State>((set, get) => ({
   async openBytes(bytes, fileName, existing, images) {
     set({ screen: "processing", error: null, progress: { fraction: 0.01, label: "" }, dxf: bytes, fileName, startedAt: performance.now(), timings: {} });
     const hash = existing?.fileHash ?? (await sha256Hex(bytes));
-    const format = /\.skp$/i.test(fileName) ? "skp" as const : "dxf" as const;
+    const format = /\.skp$/i.test(fileName) ? "skp" as const : /\.3ds$/i.test(fileName) ? "3ds" as const : "dxf" as const;
     const res = await runWorker({ type: "process", dxf: bytes.slice().buffer, unitsToMeters: existing?.unitsToMeters, format }, (f, label) => set({ progress: { fraction: f, label } }));
     if (res.type === "error") { set({ screen: "failed", error: { message: res.message, detail: res.detail } }); return; }
     if (res.type !== "done") return;
@@ -138,7 +138,7 @@ export const useStore = create<State>((set, get) => ({
     // SketchUp files carry their textures: always re-read, so improvements to the import reach existing projects too
     if (imgs.length && (images?.length || format === "skp" || !existing?.customMaterials)) customs = await cadTextures(existing?.id ?? newProject(fileName, hash).id, res.model, imgs);
     applyCadTextures(res.scene, customs);
-    if (format === "dxf") noteMissingTextures(res.model, customs, !!images?.length, get().lang);
+    if (format !== "skp") noteMissingTextures(res.model, customs, !!images?.length, get().lang);
     let project = existing ?? automatic({ ...newProject(fileName, hash), ...(customs?.length ? { customMaterials: customs } : {}) }, res.scene, res.model);
     project = { ...project, language: project.language ?? get().lang, ...(existing && format === "skp" ? { customMaterials: customs } : {}) };
     set({ model: res.model, scene: res.scene, project, past: [], future: [], screen: "work", step: "customize", timings: res.timings });

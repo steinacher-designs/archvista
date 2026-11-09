@@ -203,10 +203,6 @@ function Design() {
           <input type="color" value={project!.accent} onChange={(e) => update((p) => { p.accent = e.target.value; }, { coalesce: "accent" })} style={{ width: 40, height: 34, border: 0, background: "none" }} aria-label={t.accent} />
         </div>
       </div>
-      <label className="auto" style={{ margin: "14px 0 0", maxWidth: "none" }}>
-        <input type="checkbox" checked={project!.tour} onChange={(e) => update((p) => { p.tour = e.target.checked; })} />
-        <span><b>{lang === "de" ? "Automatischen Rundgang anbieten" : "Offer an automatic tour"}</b><small>{lang === "de" ? "Besucher können sich durch alle Blickpunkte führen lassen." : "Visitors can be guided through all viewpoints."}</small></span>
-      </label>
     </>
   );
 }

@@ -2,8 +2,9 @@
 import { importDxf } from "../core/dxf/import";
 import { prepareScene } from "../core/scene";
 import { importSkp } from "../core/skp/import";
+import { importTds } from "../core/tds/import";
 
-export type WorkerIn = { type: "process"; dxf: ArrayBuffer; unitsToMeters?: number; format?: "dxf" | "skp" };
+export type WorkerIn = { type: "process"; dxf: ArrayBuffer; unitsToMeters?: number; format?: "dxf" | "skp" | "3ds" };
 export type WorkerOut =
   | { type: "progress"; fraction: number; label: string }
   | { type: "done"; model: ReturnType<typeof strip>; scene: ReturnType<typeof prepareScene>; timings: Record<string, number>; images?: { name: string; data: Uint8Array }[] }
@@ -24,6 +25,8 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
     if (e.data.format === "skp") {
       const r = importSkp(new Uint8Array(e.data.dxf), { unitsToMeters: e.data.unitsToMeters, onProgress });
       model = r.model; images = r.images;
+    } else if (e.data.format === "3ds") {
+      model = importTds(new Uint8Array(e.data.dxf), { unitsToMeters: e.data.unitsToMeters, onProgress });
     } else {
       model = importDxf(new TextDecoder("utf-8").decode(e.data.dxf), { unitsToMeters: e.data.unitsToMeters, onProgress });
     }

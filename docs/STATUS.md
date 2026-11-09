@@ -20,6 +20,8 @@
 | SketchUp-Import (.skp 2013–heute, OpenSKP): Geometrie, Tags, Materialien, eingebettete Texturen mit SketchUp-UVs, auch auf der Website | ✅ | 69 von 74 OpenSKP-Testdateien lesbar; nicht lesbar: einige 2019/2020-Dateien mit eigenen Linienstilen → klare Meldung mit Abhilfe |
 | SketchUp: kein Flackern (Vorder-/Rückseiten einseitig, Wicklung nach Normalen, doppelte Flächen entfernt, feste Tiefenpriorität), Tag-Farben ≠ Material, „Colorize“, PNG-Löcher | ✅ | an zwei echten Nutzerdateien geprüft (52 000 / 409 000 Dreiecke), Vergleich mit SketchUp-Vorschaubild |
 | Eigene Umgebung: 360°-Panorama (HDR/EXR/JPG/PNG/WebP) als Hintergrund und Licht, Drehen, Boden-Überblendung, auch auf der Website | ✅ | Ende-zu-Ende geprüft (App + Website-Vorschau) |
+| 3DS-Import (.3ds, auch als ZIP mit Texturen) | ✅ | eigener Chunk-Leser, Tests + echte 3DS-Datei |
+| Orte beim Begehen: Teleport auf den Boden an dieser Stelle (auch für im Umsehen-Modus gespeicherte Orte), Innenorte schalten auf Begehen; Rundgang-Knopf entfernt | ✅ | an SD-193 mit den Orten der veröffentlichten Website geprüft |
 | Materialwahl live (ohne Neuaufbau), Klick auf Fläche, Musterbilder | ✅ | |
 | VR-Brillen (WebXR): gehen mit Stick, 30°-Drehung, Kollision | ✅ | mit WebXR-Emulator (iwer, Quest 3) getestet, nicht an echter Brille |
 | GitHub-Veröffentlichung (Geräte-Anmeldung, inkrementell, Pages, Live-Prüfung) | ✅ simuliert · 🟡 echt | OAuth-App „ARCHVISTA“ (Device Flow) registriert; echte Testseite https://steinacher-designs.github.io/archvista-test/ nach 30 s online, alle Dateien korrekt unter Unterpfad, Desktop + Handy ohne Fehler. Der Veröffentlichen-Knopf selbst wird im Abschlusstest auf Windows geprüft. |

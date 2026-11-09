@@ -126,7 +126,7 @@ export function importDxf(text: string, opts: ImportOptions = {}): ImportedModel
   return finalize(built, raw.header.get("$INSUNITS"), raw.version, opts, progress, raw.materials);
 }
 
-function finalize(
+export function finalize(
   b: BuildResult,
   insunitsPairs: [number, string][] | undefined,
   version: string | undefined,

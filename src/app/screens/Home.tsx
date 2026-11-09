@@ -28,7 +28,7 @@ export function Home() {
           <h2>{t.dropTitle}</h2>
           <p>{t.dropOr}</p>
           <button className="btn brand big" onClick={() => input.current?.click()}>{t.chooseFile}</button>
-          <input ref={input} type="file" accept=".dxf,.skp,.zip" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void openFile(f); e.target.value = ""; }} data-testid="file" />
+          <input ref={input} type="file" accept=".dxf,.skp,.3ds,.zip" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void openFile(f); e.target.value = ""; }} data-testid="file" />
           <label className="auto">
             <input type="checkbox" checked={autoMode} onChange={(e) => setAutoMode(e.target.checked)} />
             <span><b>{t.autoMode}</b><small>{t.autoModeHint}</small></span>
@@ -77,7 +77,7 @@ function MaterialGuide() {
           <li>Images from the Autodesk material library are usually in <code>C:\Program Files (x86)\Common Files\Autodesk Shared\Materials\Textures</code> – copy the ones you use into the folder.</li>
         </ol>
       )}
-      <p>{de ? "SketchUp-Dateien (.skp) bringen Materialien und Texturen von selbst mit. Alles lässt sich danach unter „Anpassen → Materialien“ ändern." : "SketchUp files (.skp) bring their materials and textures along by themselves. Everything can be changed afterwards under “Customize → Materials”."}</p>
+      <p>{de ? "3DS-Dateien (.3ds) gehen genauso – mit Texturen als ZIP (3DS-Datei + Bilder). SketchUp-Dateien (.skp) bringen Materialien und Texturen von selbst mit. Alles lässt sich danach unter „Anpassen → Materialien“ ändern." : "3DS files (.3ds) work the same way – with textures as a ZIP (3DS file + images). SketchUp files (.skp) bring their materials and textures along by themselves. Everything can be changed afterwards under “Customize → Materials”."}</p>
     </details>
   );
 }
