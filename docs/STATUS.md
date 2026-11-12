@@ -21,6 +21,8 @@
 | SketchUp: kein Flackern (Vorder-/Rückseiten einseitig, Wicklung nach Normalen, doppelte Flächen entfernt, feste Tiefenpriorität), Tag-Farben ≠ Material, „Colorize“, PNG-Löcher | ✅ | an zwei echten Nutzerdateien geprüft (52 000 / 409 000 Dreiecke), Vergleich mit SketchUp-Vorschaubild |
 | Eigene Umgebung: 360°-Panorama (HDR/EXR/JPG/PNG/WebP) als Hintergrund und Licht, Drehen, Boden-Überblendung, auch auf der Website | ✅ | Ende-zu-Ende geprüft (App + Website-Vorschau) |
 | 3DS-Import (.3ds, auch als ZIP mit Texturen) | ✅ | eigener Chunk-Leser, Tests + echte 3DS-Datei |
+| GLB/glTF-Import (.glb, .gltf als ZIP): Knoten-Transformationen, Materialien, eingebettete Texturen mit UVs | ✅ | tests/gltf-import.test.ts, Khronos-Beispiele (BoxTextured, ABeautifulGame 1,5 Mio. Dreiecke) |
+| Sehr große Modelle: Anzeige-Vereinfachung feiner Teile (Budget 400k ohne Grafikkarte / 1 Mio. Handy / 2,5 Mio.), Details beim Bewegen ausgeblendet, Schatten nur nach Änderungen, kein Dauer-Neuzeichnen, Vorschaubild ohne Blockieren; Website max. 2 Mio. Dreiecke | ✅ | tests/simplify.test.ts; 6-Mio.-Dreiecke-Testgebäude ohne Grafikkarte: 3 s → 0,35 s pro Bild, App-Blockaden 11,5 s → 3 s (scripts/dev/big-app.mjs, frame-cost.mjs) |
 | Orte beim Begehen: Teleport auf den Boden an dieser Stelle (auch für im Umsehen-Modus gespeicherte Orte), Innenorte schalten auf Begehen; Rundgang-Knopf entfernt | ✅ | an SD-193 mit den Orten der veröffentlichten Website geprüft |
 | Materialwahl live (ohne Neuaufbau), Klick auf Fläche, Musterbilder | ✅ | |
 | Eigene Materialien (Name, Farbe oder Foto, matt/seidenmatt/glänzend, Kachelgröße), bleiben beim Neu-Einlesen erhalten | ✅ | Test + Browser-Prüfung (scripts/dev/variant-app.mjs) |

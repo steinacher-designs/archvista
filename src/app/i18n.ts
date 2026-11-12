@@ -2,7 +2,7 @@
 
 const de = {
   appTagline: "Aus Ihrem 3D-Modell wird in Minuten eine begehbare Website.",
-  dropTitle: "DXF-, SketchUp- oder 3DS-Datei hierher ziehen",
+  dropTitle: "DXF-, SketchUp-, 3DS- oder GLB-Datei hierher ziehen",
   dropOr: "oder",
   chooseFile: "Datei auswählen",
   autoMode: "Alles automatisch – direkt zur fertigen Website",
@@ -78,7 +78,7 @@ const de = {
 const en: typeof de = {
   ...de,
   appTagline: "Turn your 3D model into a walkable website in minutes.",
-  dropTitle: "Drop a DXF, SketchUp or 3DS file here", dropOr: "or", chooseFile: "Choose file",
+  dropTitle: "Drop a DXF, SketchUp, 3DS or GLB file here", dropOr: "or", chooseFile: "Choose file",
   autoMode: "Fully automatic – straight to the finished website",
   autoModeHint: "ARCHVISTA picks surroundings, light and design. You can still change everything afterwards.",
   createWebsite: "Create my website", recent: "Recent projects", noRecent: "No projects yet.", open: "Open", remove: "Remove",

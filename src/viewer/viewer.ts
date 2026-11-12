@@ -28,6 +28,7 @@ import type { EnvironmentId, Hotspot, Quality, Viewpoint } from "../core/project
 import { pointInPolygon } from "../core/zones";
 import type { MaterialPreset } from "../core/materials";
 import { HUD_CSS, t as tr, type Lang } from "./hud";
+import { simplifyToBudget, isDetailPart } from "../core/simplify";
 
 Mesh.prototype.raycast = acceleratedRaycast;
 
@@ -54,6 +55,8 @@ export interface ViewerOptions {
   /** Own surroundings (panorama): base URL on websites, resolver in the desktop app. */
   envBase?: string;
   resolveEnv?: (file: string) => Promise<string | null>;
+  /** Most triangles drawn; larger models are simplified for display (default depends on the device). */
+  triangleBudget?: number;
 }
 
 export interface BuildingPart { presetId: string; /** editor only: which model part this is (never published) */ key?: string; /** visible from the front only */ singleSided?: boolean; positions: Float32Array; normals: Float32Array; uvs: Float32Array; indices: Uint32Array | Uint16Array }
@@ -181,6 +184,20 @@ export class ArchViewer {
   /** Replace the building (used directly by the desktop app for instant previews). */
   setBuilding(parts: BuildingPart[], config: PublicConfig, opts: { keepView?: boolean } = {}) {
     this.invalidate(8);
+    // very large models: finely detailed parts are thinned out for display (walls, floors, roofs stay exact);
+    // without a graphics driver every triangle costs CPU time, so the budget is lower there
+    const budget = this.opts.triangleBudget ?? (this.softwareRendering ? 400_000 : isCoarse() ? 1_000_000 : 2_500_000);
+    const simple = simplifyToBudget(parts, budget);
+    if (simple.cell) console.info(`[archvista] großes Modell: ${simple.before.toLocaleString("de-AT")} → ${simple.after.toLocaleString("de-AT")} Dreiecke in der Anzeige (Details bis ${Math.round(simple.cell * 100)} cm vereinfacht)`);
+    parts = simple.parts;
+    this.displayTriangles = simple.after;
+    this.simplified = simple.cell > 0;
+    // shadows of a still scene only need drawing again after a change (big saving for large models)
+    this.staticShadows = this.softwareRendering || simple.after > 1_000_000;
+    this.renderer.shadowMap.autoUpdate = !this.staticShadows;
+    // heavy scenes: while the view moves, fine details are left out for a fluid picture; at rest all is drawn
+    this.heavy = simple.after > (this.softwareRendering ? 150_000 : 1_500_000);
+    this.detailMeshes = [];
     this.highlight(null);
     this.config = config;
     disposeGroup(this.building);
@@ -204,6 +221,7 @@ export class ArchViewer {
       mesh.userData.presetId = p.presetId;
       mesh.userData.key = p.key;
       if (glass) mesh.renderOrder = 2;
+      if (this.heavy && isDetailPart(p)) this.detailMeshes.push(mesh);
       this.building.add(mesh);
     }
     this.rebuildCollider();
@@ -719,7 +737,7 @@ export class ArchViewer {
   }
 
   private resize() {
-    this.invalidate(8);
+    this.dirty = Math.max(this.dirty, 3); // (no new shadows needed for a new window size)
     const w = this.container.clientWidth || 800, h = this.container.clientHeight || 600;
     this.renderer.setSize(w, h, false);
     this.renderer.domElement.style.width = "100%";
@@ -1027,16 +1045,33 @@ export class ArchViewer {
     let moved = false;
     for (let i = 0; i < 16; i++) if (Math.abs(m[i] - this.lastCam[i]) > 1e-6) { moved = true; break; }
     const loading = this.lib.pending() > 0;
-    if (loading) this.dirty = Math.max(this.dirty, 2);
-    else if (this.wasLoading) this.dirty = Math.max(this.dirty, 12);
+    // (heavy scene: no redrawing every frame while pictures arrive – once they are all there is enough)
+    if (loading) this.dirty = Math.max(this.dirty, this.heavy ? 0 : 2);
+    else if (this.wasLoading) { this.dirty = Math.max(this.dirty, 12); this.shadowDirty = true; }
     this.wasLoading = loading;
-    if (!moved && this.dirty <= 0 && !this.camAnim && !this.tour && !this.envRes?.update) return;
+    // (a heavy scene does not keep redrawing for the animated sea)
+    if (!moved && this.dirty <= 0 && !this.camAnim && !this.tour && (!this.envRes?.update || this.heavy)) return;
     if (this.dirty > 0) this.dirty--;
+    // heavy scene: a few repeated frames are enough after a change (each one takes long)
+    if (this.heavy && this.dirty > 1) this.dirty = 1;
+    if (this.heavy) {
+      const moving = moved || !!this.camAnim || !!this.tour;
+      if (moving !== this.detailHidden && this.detailMeshes.length) {
+        for (const d of this.detailMeshes) d.visible = !moving;
+        this.detailHidden = moving;
+      }
+      if (moving) {
+        // when the view comes to rest: one full picture with every detail
+        if (this.restTimer) clearTimeout(this.restTimer);
+        this.restTimer = setTimeout(() => { this.restTimer = null; this.invalidate(1); }, 220);
+      }
+    }
     this.lastCam.set(m);
     const now = performance.now();
     const interval = this.lastRenderAt ? now - this.lastRenderAt : 0;
     this.lastRenderAt = now;
     this.updateHotspots();
+    if (this.staticShadows && this.shadowDirty) { this.renderer.shadowMap.needsUpdate = true; this.shadowDirty = false; }
     this.composer.render(dt);
     this.framesDrawn++;
     // only continuous movement says something about the frame rate
@@ -1046,7 +1081,16 @@ export class ArchViewer {
   };
 
   /** Ask for a few more frames (after scene, material or environment changes). */
-  invalidate(frames = 3) { this.dirty = Math.max(this.dirty, frames); }
+  invalidate(frames = 3) { this.dirty = Math.max(this.dirty, frames); if (frames >= 4) this.shadowDirty = true; }
+  /** Triangles drawn and whether the display was simplified (very large models). */
+  displayTriangles = 0;
+  simplified = false;
+  private staticShadows = false;
+  private heavy = false;
+  private detailMeshes: Mesh[] = [];
+  private restTimer: ReturnType<typeof setTimeout> | null = null;
+  private detailHidden = false;
+  private shadowDirty = true;
 
   private runTour(dt: number) {
     const tour = this.tour;
@@ -1115,7 +1159,26 @@ export class ArchViewer {
   }
 
   /** Render a still image (for galleries) from a viewpoint. */
+  /** Resolves once the graphics chip has finished all work sent so far – without blocking the page meanwhile. */
+  private gpuIdle(): Promise<void> {
+    const gl = this.renderer.getContext() as WebGL2RenderingContext;
+    if (typeof gl.fenceSync !== "function") return Promise.resolve();
+    const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+    if (!sync) return Promise.resolve();
+    gl.flush();
+    return new Promise((res) => {
+      const t0 = performance.now();
+      const poll = () => {
+        if (gl.getSyncParameter(sync, gl.SYNC_STATUS) === gl.SIGNALED || performance.now() - t0 > 60000) { gl.deleteSync(sync); res(); }
+        else setTimeout(poll, 100);
+      };
+      poll();
+    });
+  }
+
   async capture(vp: Viewpoint | null, width = 1600, height = 1000, type = "image/jpeg"): Promise<Blob> {
+    // heavy scene: wait until earlier frames are drawn, so reading the picture back does not freeze the app
+    if (this.heavy) await this.gpuIdle();
     const saved = { pos: this.camera.position.clone(), target: this.orbit.target.clone(), mode: this.mode, aspect: this.camera.aspect };
     if (vp) { this.camera.position.set(...vp.position); this.camera.lookAt(...vp.target); }
     const prevPR = this.renderer.getPixelRatio();
@@ -1124,7 +1187,12 @@ export class ArchViewer {
     this.composer.setSize(width, height);
     this.camera.aspect = width / height; this.camera.updateProjectionMatrix();
     this.hsLayer.style.display = "none";
+    // heavy scene + small picture (thumbnail): fine details are invisible anyway – leave them out, saves seconds
+    const skip = this.heavy && width * height <= 640 * 400 ? this.detailMeshes.filter((d) => d.visible) : [];
+    for (const d of skip) d.visible = false;
     this.composer.render(0.016);
+    for (const d of skip) d.visible = true;
+    if (this.heavy) await this.gpuIdle();
     const blob = await new Promise<Blob>((res, rej) => this.renderer.domElement.toBlob((b) => (b ? res(b) : rej(new Error("capture failed"))), type, 0.88));
     this.renderer.setPixelRatio(prevPR);
     this.hsLayer.style.display = "";

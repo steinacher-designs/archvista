@@ -104,19 +104,19 @@ export const useStore = create<State>((set, get) => ({
     if (/\.zip$/i.test(file.name)) {
       // DXF + texture images in one ZIP
       try {
-        const keep = (n: string) => !n.startsWith("__MACOSX/") && /\.(dxf|3ds|jpe?g|png|webp)$/i.test(n);
+        const keep = (n: string) => !n.startsWith("__MACOSX/") && /\.(dxf|3ds|gltf|glb|bin|jpe?g|png|webp)$/i.test(n);
         const entries = await unzip(new Uint8Array(await file.arrayBuffer()), keep);
-        const dxfs = entries.filter((e) => /\.(dxf|3ds)$/i.test(e.name)).sort((a, b) => b.data.length - a.data.length);
-        if (!dxfs.length) { set({ screen: "failed", error: { message: de ? "Im ZIP wurde keine .dxf- oder .3ds-Datei gefunden." : "No .dxf or .3ds file found in the ZIP." } }); return; }
-        const images = entries.filter((e) => !/\.(dxf|3ds)$/i.test(e.name)).map((e) => ({ name: baseName(e.name), data: e.data }));
+        const dxfs = entries.filter((e) => /\.(dxf|3ds|gltf|glb)$/i.test(e.name)).sort((a, b) => b.data.length - a.data.length);
+        if (!dxfs.length) { set({ screen: "failed", error: { message: de ? "Im ZIP wurde keine .dxf-, .3ds- oder .gltf/.glb-Datei gefunden." : "No .dxf, .3ds or .gltf/.glb file found in the ZIP." } }); return; }
+        const images = entries.filter((e) => !/\.(dxf|3ds|gltf|glb)$/i.test(e.name)).map((e) => ({ name: baseName(e.name), data: e.data }));
         await get().openBytes(dxfs[0].data, baseName(dxfs[0].name), undefined, images);
       } catch (err) {
         set({ screen: "failed", error: { message: err instanceof ZipError ? err.message : (de ? "Das ZIP konnte nicht gelesen werden." : "Could not read the ZIP.") } });
       }
       return;
     }
-    if (!/\.(dxf|skp|3ds)$/i.test(file.name)) {
-      set({ screen: "failed", error: { message: de ? "Bitte eine .dxf-, .skp- oder .3ds-Datei (oder ein ZIP mit Modell und Texturbildern) verwenden. DWG-Dateien bitte in AutoCAD mit _DXFOUT als DXF speichern." : "Please use a .dxf, .skp or .3ds file (or a ZIP with the model and texture images). Save DWG files as DXF in AutoCAD with _DXFOUT." } });
+    if (!/\.(dxf|skp|3ds|glb|gltf)$/i.test(file.name)) {
+      set({ screen: "failed", error: { message: de ? "Bitte eine .dxf-, .skp-, .3ds- oder .glb-Datei (oder ein ZIP mit Modell und Texturbildern) verwenden. DWG-Dateien bitte in AutoCAD mit _DXFOUT als DXF speichern." : "Please use a .dxf, .skp, .3ds or .glb file (or a ZIP with the model and texture images). Save DWG files as DXF in AutoCAD with _DXFOUT." } });
       return;
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -126,23 +126,26 @@ export const useStore = create<State>((set, get) => ({
   async openBytes(bytes, fileName, existing, images) {
     set({ screen: "processing", error: null, progress: { fraction: 0.01, label: "" }, dxf: bytes, fileName, startedAt: performance.now(), timings: {} });
     const hash = existing?.fileHash ?? (await sha256Hex(bytes));
-    const format = /\.skp$/i.test(fileName) ? "skp" as const : /\.3ds$/i.test(fileName) ? "3ds" as const : "dxf" as const;
-    const res = await runWorker({ type: "process", dxf: bytes.slice().buffer, unitsToMeters: existing?.unitsToMeters, format }, (f, label) => set({ progress: { fraction: f, label } }));
+    const format = /\.skp$/i.test(fileName) ? "skp" as const : /\.3ds$/i.test(fileName) ? "3ds" as const : /\.(glb|gltf)$/i.test(fileName) ? "gltf" as const : "dxf" as const;
+    // a .gltf reads its .bin and pictures from the same ZIP; those pictures then come back as the model's textures
+    const files = format === "gltf" ? (images ?? []) : undefined;
+    const res = await runWorker({ type: "process", dxf: bytes.slice().buffer, unitsToMeters: existing?.unitsToMeters, format, ...(files?.length ? { files } : {}) }, (f, label) => set({ progress: { fraction: f, label } }));
     if (res.type === "error") { set({ screen: "failed", error: { message: res.message, detail: res.detail } }); return; }
     if (res.type !== "done") return;
     if (!res.model.ok) { set({ screen: "failed", model: res.model, error: { message: res.model.warnings[0]?.message ?? get().t.noGeometry, detail: res.model.warnings[0]?.detail } }); return; }
     // materials with own texture images (ZIP import), kept with the project for later sessions
     let customs = existing?.customMaterials;
     // images: from a ZIP, or embedded in a SketchUp file (those are re-read from the .skp every time)
-    const imgs = [...(images ?? []), ...(res.images ?? [])];
+    const imgs = [...(format === "gltf" ? [] : images ?? []), ...(res.images ?? [])];
+    const embedded = format === "skp" || format === "gltf"; // textures travel inside the model file
     // SketchUp files carry their textures: always re-read, so improvements to the import reach existing projects too
     // the user's own materials are never touched by a re-import
     const own = (existing?.customMaterials ?? []).filter((m) => m.group === "own");
-    if (imgs.length && (images?.length || format === "skp" || !existing?.customMaterials?.some((m) => m.group !== "own"))) customs = [...await cadTextures(existing?.id ?? newProject(fileName, hash).id, res.model, imgs), ...own];
+    if (imgs.length && (images?.length || embedded || !existing?.customMaterials?.some((m) => m.group !== "own"))) customs = [...await cadTextures(existing?.id ?? newProject(fileName, hash).id, res.model, imgs), ...own];
     applyCadTextures(res.scene, customs);
-    if (format !== "skp") noteMissingTextures(res.model, customs, !!images?.length, get().lang);
+    if (!embedded) noteMissingTextures(res.model, customs, !!images?.length, get().lang);
     let project = existing ?? automatic({ ...newProject(fileName, hash), ...(customs?.length ? { customMaterials: customs } : {}) }, res.scene, res.model);
-    project = { ...project, language: project.language ?? get().lang, ...(existing && format === "skp" ? { customMaterials: customs } : {}) };
+    project = { ...project, language: project.language ?? get().lang, ...(existing && embedded ? { customMaterials: customs } : {}) };
     set({ model: res.model, scene: res.scene, project, past: [], future: [], screen: "work", step: "customize", timings: res.timings });
     void platform.saveProject(project, existing ? undefined : bytes);
   },

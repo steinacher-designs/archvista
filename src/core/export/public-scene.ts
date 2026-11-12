@@ -4,6 +4,7 @@ import type { PreparedScene, ScenePart } from "../scene";
 import type { Project, Hotspot, Viewpoint, EnvironmentId, Quality, Lighting, Place, CustomEnvironment } from "../project";
 import { Zone, removeGreyGeometry, pointInZone } from "../zones";
 import { PRESET, MaterialPreset, withColour, setCustomPresets, resolvePreset } from "../materials";
+import { simplifyToBudget } from "../simplify";
 import { writeGlb } from "./glb";
 import { cellOf } from "../analysis/spatial";
 
@@ -78,10 +79,14 @@ export function publicParts(scene: PreparedScene, project: Project) {
   return { parts, removedTriangles: cut.removedTriangles, clippedTriangles: cut.clippedTriangles };
 }
 
+/** Most triangles a website model gets (about 70 MB); larger models are simplified (details only). */
+export const WEBSITE_TRIANGLES = 2_000_000;
+
 export function buildPublicScene(scene: PreparedScene, project: Project) {
   const pp = publicParts(scene, project);
   const config = publicConfig(scene, project, new Set(pp.parts.map((p) => p.presetId)));
-  const glb = writeGlb(pp.parts);
+  // very large models: fine details thinned out so the website file stays loadable (GitHub: max. 100 MB per file)
+  const glb = writeGlb(simplifyToBudget(pp.parts, WEBSITE_TRIANGLES).parts);
   return { glb, config, stats: { removedTriangles: pp.removedTriangles, clippedTriangles: pp.clippedTriangles, triangles: pp.parts.reduce((n, p) => n + p.indices.length / 3, 0) } };
 }
 
