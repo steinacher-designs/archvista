@@ -10,6 +10,7 @@ const S = {
     hintTouch: "Joystick: gehen · Wischen: umsehen",
     hintOrbit: "Ziehen zum Drehen · Mausrad zoomen · „Begehen“ für die Ich-Perspektive",
     loading: "Modell wird geladen", webgl: "Dieser Browser kann keine 3D-Grafik (WebGL2) anzeigen.",
+    variants: "Material ausprobieren", original: "Original",
   },
   en: {
     walk: "Walk", orbit: "Look around", tour: "Tour", quality: "Quality", fullscreen: "Full screen", auto: "Auto", vr: "VR headset",
@@ -18,6 +19,7 @@ const S = {
     hintTouch: "Joystick: walk · Swipe: look around",
     hintOrbit: "Drag to rotate · scroll to zoom · “Walk” for first-person",
     loading: "Loading model", webgl: "This browser cannot display 3D graphics (WebGL2).",
+    variants: "Try a material", original: "Original",
   },
 };
 
@@ -54,6 +56,14 @@ export const HUD_CSS = `
 .av-panel img{width:100%;border-radius:10px;margin:6px 0 10px}
 .av-panel ul{padding-left:18px;color:#555;font-size:13px}
 .av-panel .av-spec{font-size:13px;padding:8px 10px;border-left:3px solid var(--av-accent);background:rgba(0,0,0,.04)}
+.av-var{margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,.08)}
+.av-var-t{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#777;margin-bottom:8px}
+.av-var-r{display:flex;flex-wrap:wrap;gap:8px}
+.av-var-b{display:flex;flex-direction:column;align-items:center;gap:6px;width:72px;padding:6px 4px 8px;border:1px solid rgba(0,0,0,.1);border-radius:12px;background:#fff;cursor:pointer;font:inherit;font-size:12px;line-height:1.2;color:#333;transition:border-color .15s,box-shadow .15s}
+.av-var-b i{display:block;width:44px;height:44px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.av-var-b span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.av-var-b:hover{border-color:rgba(0,0,0,.3)}
+.av-var-b.on{border-color:var(--av-accent);box-shadow:0 0 0 2px var(--av-accent)}
 .av-x{position:absolute;right:12px;top:10px;border:0;background:none;font-size:24px;cursor:pointer;color:#666}
 .av-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#fff;font:15px system-ui,sans-serif;background:#111;z-index:5;transition:opacity .6s}
 .av-loading .av-track{width:220px;height:3px;background:rgba(255,255,255,.2);border-radius:2px;overflow:hidden}

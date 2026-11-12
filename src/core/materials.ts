@@ -33,10 +33,11 @@ export interface MaterialPreset {
   colorize?: boolean;
 }
 
-export type MaterialGroup = "cad" | "wall" | "floor" | "wood" | "stone" | "roof" | "metal" | "glass" | "outdoor";
+export type MaterialGroup = "cad" | "own" | "wall" | "floor" | "wood" | "stone" | "roof" | "metal" | "glass" | "outdoor";
 
 export const GROUP_LABEL: Record<MaterialGroup, { de: string; en: string }> = {
   cad: { de: "Aus der CAD-Datei", en: "From the CAD file" },
+  own: { de: "Eigene Materialien", en: "Own materials" },
   wall: { de: "Wand & Putz", en: "Walls & plaster" }, floor: { de: "Boden", en: "Floors" }, wood: { de: "Holz", en: "Wood" },
   stone: { de: "Stein & Beton", en: "Stone & concrete" }, roof: { de: "Dach", en: "Roof" }, metal: { de: "Metall", en: "Metal" },
   glass: { de: "Glas", en: "Glass" }, outdoor: { de: "Außen", en: "Outdoor" },

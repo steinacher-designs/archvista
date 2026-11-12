@@ -49,19 +49,31 @@ export function partMaterialId(part: Pick<ScenePart, "key" | "auto">, project: P
   return withColour(ov ?? part.auto.presetId, colour);
 }
 
+/** Parts with material variants (info point add-on) get anonymous tags — the website never sees layer names. */
+export function variantTags(project: Pick<Project, "hotspots">): Map<string, string> {
+  const tags = new Map<string, string>();
+  for (const h of project.hotspots) {
+    const v = h.variants;
+    if (v?.part && v.options.length && !tags.has(v.part)) tags.set(v.part, `v${tags.size + 1}`);
+  }
+  return tags;
+}
+
 export function publicParts(scene: PreparedScene, project: Project) {
   setCustomPresets(project.customMaterials);
   const grey = effectiveZones(project).filter((z) => z.kind === "grey");
   const meshes = scene.parts.map((p) => ({ id: p.id, layer: p.layer, color: p.color, positions: p.positions, normals: p.normals, indices: p.indices, triangleCount: p.indices.length / 3 }));
   const cut = removeGreyGeometry(meshes, grey);
   const byId = new Map(scene.parts.map((p) => [p.id, p]));
+  const tags = variantTags(project);
   const parts = cut.meshes.map((m) => {
     const part = byId.get(m.id)!;
     const presetId = partMaterialId(part, project);
     // SketchUp's own textures keep SketchUp's texture placement (as long as the part was not cut by a hidden area)
     const own = part.uvTex && m.positions === part.positions && resolvePreset(presetId)?.sourceUv;
     const uvs = own ? part.uvTex! : m.positions === part.positions ? part.uvs : boxUV(m.positions, m.normals);
-    return { presetId, key: part.key, ...(part.singleSided ? { singleSided: true } : {}), positions: m.positions, normals: m.normals, uvs, indices: m.indices };
+    const tag = tags.get(part.key);
+    return { presetId, key: part.key, ...(part.singleSided ? { singleSided: true } : {}), ...(tag ? { tag } : {}), positions: m.positions, normals: m.normals, uvs, indices: m.indices };
   });
   return { parts, removedTriangles: cut.removedTriangles, clippedTriangles: cut.clippedTriangles };
 }
@@ -73,8 +85,9 @@ export function buildPublicScene(scene: PreparedScene, project: Project) {
   return { glb, config, stats: { removedTriangles: pp.removedTriangles, clippedTriangles: pp.clippedTriangles, triangles: pp.parts.reduce((n, p) => n + p.indices.length / 3, 0) } };
 }
 
-export function publicConfig(scene: PreparedScene, project: Project, usedPresets: Set<string>): PublicConfig {
+export function publicConfig(scene: PreparedScene, project: Project, used: Set<string>): PublicConfig {
   setCustomPresets(project.customMaterials);
+  const usedPresets = new Set(used);
   const zones = effectiveZones(project);
   const grey = zones.filter((z) => z.kind === "grey");
   const red = zones.filter((z) => z.kind === "red");
@@ -107,7 +120,17 @@ export function publicConfig(scene: PreparedScene, project: Project, usedPresets
   });
 
   // 3) hotspots & viewpoints that would reveal hidden or restricted areas are dropped
-  const hotspots = project.hotspots.filter((h) => !grey.some((z) => pointInZone(h.position, z, 0.1)));
+  const tags = variantTags(project);
+  const hotspots = project.hotspots.filter((h) => !grey.some((z) => pointInZone(h.position, z, 0.1))).map((h): Hotspot => {
+    const { variants, ...rest } = h;
+    const tag = variants ? tags.get(variants.part) : undefined;
+    const part = variants && scene.parts.find((p) => p.key === variants.part);
+    const options = (variants?.options ?? []).filter((o) => PRESET.has(o.id)).slice(0, 3);
+    if (!tag || !part || !options.length) return rest;
+    const original = partMaterialId(part, project);
+    for (const id of [original, ...options.map((o) => o.id)]) usedPresets.add(id);
+    return { ...rest, variants: { part: tag, original, ...(variants!.originalName?.trim() ? { originalName: variants!.originalName.trim() } : {}), options: options.map((o, i) => ({ id: o.id, name: o.name.trim() || (o.id.includes("~") ? `${project.language === "en" ? "Option" : "Variante"} ${i + 1}` : PRESET.get(o.id)?.label[project.language ?? "de"] ?? o.id) })) } };
+  });
   const viewpoints = (project.viewpoints.length ? project.viewpoints : scene.viewpoints).filter((v) => !blockedAny(v.position, 0.3));
 
   const materials: Record<string, MaterialPreset> = {};

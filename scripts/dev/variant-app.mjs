@@ -1,0 +1,51 @@
+// App check (browser build): own material with a photo; info point with materials to try. args: dist dxf photo outPrefix
+import { chromium } from "playwright"; import http from "node:http"; import { readFile } from "node:fs/promises"; import path from "node:path";
+const [dist, dxf, photo, out] = process.argv.slice(2);
+const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".webp": "image/webp" };
+const srv = http.createServer(async (q, r) => { let f = decodeURIComponent(q.url.split("?")[0]); if (f === "/") f = "/index.html"; try { const b = await readFile(path.join(dist, f)); r.writeHead(200, { "content-type": types[path.extname(f)] ?? "application/octet-stream" }); r.end(b); } catch { r.writeHead(404); r.end(); } }).listen(0);
+const b = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+const res = []; const ok = (n, c, x = "") => res.push(`${c ? "✓" : "✗"} ${n}${x ? " " + x : ""}`);
+await p.addInitScript(() => { localStorage.setItem("av-maxfps", "1"); localStorage.setItem("av-auto", "0"); sessionStorage.setItem("av-gpu-hint", "off"); });
+await p.goto(`http://localhost:${srv.address().port}/`);
+await p.waitForTimeout(1500);
+await p.getByTestId("file").setInputFiles(dxf);
+await p.getByTestId("viewer").waitFor({ timeout: 120000 });
+await p.waitForTimeout(6000);
+// 1) own material
+await p.getByTestId("tab-materials").click();
+await p.locator(".mhead").first().click();
+await p.getByTestId("own-add").click();
+await p.getByTestId("own-name").fill("Stoff Petrol");
+await p.getByTestId("own-file").setInputFiles(photo);
+await p.waitForTimeout(500);
+await p.locator(".ownform").scrollIntoViewIfNeeded();
+await p.screenshot({ path: `${out}-form.png`, timeout: 120000 });
+await p.getByTestId("own-create").click();
+await p.waitForTimeout(4000);
+const st = () => p.evaluate(() => { const v = window.__archvistaViewer; const s = new Set(); v.building.traverse((o) => { if (o.isMesh && o.userData.presetId?.startsWith("own:")) s.add(o.userData.presetId); }); let map = false; v.building.traverse((o) => { if (o.isMesh && o.userData.presetId?.startsWith("own:") && o.material.map) map = true; }); return { own: [...s], map }; });
+const s1 = await st();
+ok("own material created & assigned, photo loaded", s1.own.length === 1 && s1.map, JSON.stringify(s1));
+ok("own tile listed", (await p.locator(".mtile", { hasText: "Stoff Petrol" }).count()) >= 1);
+await p.screenshot({ path: `${out}-own.png`, timeout: 120000 });
+// 2) info point with variants
+await p.getByTestId("tab-hotspots").click();
+await p.locator(".hs").first().click();
+await p.getByTestId("var-add").click();
+// click a surface in the 3D view
+const box = await p.getByTestId("viewer").boundingBox();
+await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+await p.waitForTimeout(1500);
+ok("variants box appears after clicking a part", (await p.getByTestId("var-box").count()) === 1);
+await p.getByTestId("var-name-0").fill("Blau");
+await p.getByTestId("var-more").click();
+await p.getByTestId("var-name-1").fill("Petrol");
+await p.locator(".vrow").nth(2).locator("select").selectOption({ label: "Stoff Petrol" });
+await p.waitForTimeout(2500);
+const proj = await p.evaluate(() => JSON.stringify(window.__archvistaStore?.getState?.().project?.hotspots?.[0]?.variants ?? null));
+res.push("variants: " + proj);
+await p.locator(".hsvar").scrollIntoViewIfNeeded();
+await p.screenshot({ path: `${out}-hs.png`, timeout: 120000 });
+res.push("page errors: " + (errs.length ? errs.join(" | ") : "none"));
+console.log(res.join("\n")); await b.close(); srv.close();

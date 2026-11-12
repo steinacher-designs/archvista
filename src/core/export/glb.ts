@@ -7,6 +7,8 @@ export interface GlbInputPart {
   presetId: string;
   /** visible from its front only (SketchUp faces painted differently on each side) */
   singleSided?: boolean;
+  /** anonymous tag ("v1") of a part whose material visitors can switch (kept as its own mesh) */
+  tag?: string;
   positions: Float32Array;
   normals: Float32Array;
   uvs: Float32Array;
@@ -23,13 +25,13 @@ export function mergeByMaterial(parts: GlbInputPart[]): GlbInputPart[] {
   const groups = new Map<string, GlbInputPart[]>();
   for (const p of parts) {
     if (!p.indices.length) continue;
-    const k = p.presetId + (p.singleSided ? "\u00001s" : "");
+    const k = p.presetId + (p.singleSided ? "\u00001s" : "") + (p.tag ? `\u0000${p.tag}` : "");
     const l = groups.get(k);
     if (l) l.push(p); else groups.set(k, [p]);
   }
   const out: GlbInputPart[] = [];
   for (const list of groups.values()) {
-    const presetId = list[0].presetId, singleSided = !!list[0].singleSided;
+    const presetId = list[0].presetId, singleSided = !!list[0].singleSided, tag = list[0].tag;
     // keep chunks below 4M vertices so very large models stay loadable
     let batch: GlbInputPart[] = [], verts = 0;
     const flush = () => {
@@ -43,7 +45,7 @@ export function mergeByMaterial(parts: GlbInputPart[]): GlbInputPart[] {
         for (let i = 0; i < p.indices.length; i++) idx[io + i] = p.indices[i] + vo;
         vo += p.positions.length / 3; io += p.indices.length;
       }
-      out.push({ presetId, ...(singleSided ? { singleSided } : {}), positions: pos, normals: nrm, uvs: uv, indices: idx });
+      out.push({ presetId, ...(singleSided ? { singleSided } : {}), ...(tag ? { tag } : {}), positions: pos, normals: nrm, uvs: uv, indices: idx });
       batch = []; verts = 0;
     };
     for (const p of list) {
@@ -100,7 +102,7 @@ export function writeGlb(parts: GlbInputPart[], extras: Record<string, unknown> 
     accessors.push({ bufferView: iv, componentType: small ? 5123 : 5125, count: p.indices.length, type: "SCALAR" });
     const a = accessors.length - 4;
     meshes.push({ name: p.presetId, primitives: [{ attributes: { POSITION: a, NORMAL: a + 1, TEXCOORD_0: a + 2 }, indices: a + 3, material: mi }] });
-    nodes.push({ name: `building_${meshes.length - 1}`, mesh: meshes.length - 1 });
+    nodes.push({ name: `building_${meshes.length - 1}`, mesh: meshes.length - 1, ...(p.tag ? { extras: { av: p.tag } } : {}) });
   }
 
   const json = {

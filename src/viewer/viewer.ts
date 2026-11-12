@@ -86,6 +86,8 @@ export class ArchViewer {
   private hsLayer: HTMLDivElement;
   private hsEls = new Map<string, HTMLDivElement>();
   private hotspots: Hotspot[] = [];
+  /** Material variant a visitor picked per part (info point add-on). */
+  private variantChoice = new Map<string, string>();
   private clipPlane = new Plane(new Vector3(0, -1, 0), 1e6);
   private tour: { list: Viewpoint[]; i: number; t: number; from: [Vector3, Vector3]; to: [Vector3, Vector3]; hold: boolean } | null = null;
   private camAnim: { from: [Vector3, Vector3]; to: [Vector3, Vector3]; t: number; dur: number } | null = null;
@@ -162,8 +164,10 @@ export class ArchViewer {
       if (!m.isMesh) return;
       const g = m.geometry as BufferGeometry;
       const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as Material;
+      const tag = (m.userData as { av?: unknown }).av;
       parts.push({
         presetId: mat.name,
+        ...(typeof tag === "string" ? { key: tag } : {}),
         singleSided: mat.side !== DoubleSide,
         positions: g.attributes.position.array as Float32Array,
         normals: g.attributes.normal.array as Float32Array,
@@ -224,7 +228,9 @@ export class ArchViewer {
       if (!me.isMesh || !me.userData.key) return;
       keyed = true;
       const id = byKey.get(me.userData.key);
-      if (!id || id === me.userData.presetId) return;
+      if (!id) return;
+      delete me.userData.variantBase;
+      if (id === me.userData.presetId) return;
       me.material = this.material(id, materials[id], !!me.userData.singleSided);
       me.userData.presetId = id;
       const glass = id.split("~")[0] === "glass";
@@ -236,6 +242,37 @@ export class ArchViewer {
     for (const [id, m] of this.mats) if (!used.has(m)) { disposeMaterial(m); this.mats.delete(id); }
     this.invalidate(8);
     return keyed;
+  }
+
+  /**
+   * Material variants of an info point: show part `target` in material `id` (null = back to its own material).
+   * `pr` is needed when the material is not part of the scene config (editor preview).
+   */
+  setVariant(target: string, id: string | null, pr?: MaterialPreset) {
+    if (!this.config) return;
+    if (id && pr && !this.config.materials[id]) this.config = { ...this.config, materials: { ...this.config.materials, [id]: pr } };
+    this.building.traverse((o) => {
+      const me = o as Mesh;
+      if (!me.isMesh || me.userData.key !== target) return;
+      if (me.userData.variantBase === undefined) me.userData.variantBase = me.userData.presetId;
+      const want: string = id ?? me.userData.variantBase;
+      if (want === me.userData.presetId) return;
+      me.material = this.material(want, this.config!.materials[want], !!me.userData.singleSided);
+      me.userData.presetId = want;
+      const glass = want.split("~")[0] === "glass";
+      me.castShadow = !glass; me.renderOrder = glass ? 2 : 0;
+    });
+    this.invalidate(8);
+  }
+
+  /** Background for a small material swatch (photo texture, own image or plain colour). */
+  private swatchCss(id: string): string {
+    const pr = this.config?.materials[id];
+    const c = pr?.color ?? "#cccccc";
+    if (!pr) return c;
+    if (pr.image && !this.opts.resolveImage) return `url("${this.opts.imageBase ?? "assets/tex-user/"}${encodeURIComponent(pr.image)}") center/cover, ${c}`;
+    if (pr.texture !== "none" && !pr.paintable && this.lib.base) return `url("${this.lib.base}tex/${pr.tex ?? id}_col.webp") center/cover, ${c}`;
+    return c;
   }
 
   // ——— editor: highlight parts / click a surface to find its part ———
@@ -812,6 +849,33 @@ export class ArchViewer {
     if (h.text) for (const para of h.text.split(/\n{2,}/)) { const p = document.createElement("p"); p.textContent = para; panel.append(p); }
     if (h.materialSpec) { const p = document.createElement("p"); p.className = "av-spec"; p.textContent = h.materialSpec; panel.append(p); }
     if (h.facts?.length) { const ul = document.createElement("ul"); for (const f of h.facts) { const li = document.createElement("li"); li.textContent = f; ul.append(li); } panel.append(ul); }
+    const va = h.variants;
+    if (va?.options.length) {
+      const box = document.createElement("div"); box.className = "av-var";
+      const cap = document.createElement("div"); cap.className = "av-var-t"; cap.textContent = tr(this.lang, "variants");
+      const row = document.createElement("div"); row.className = "av-var-r";
+      const active = this.variantChoice.get(va.part) ?? null;
+      const choices: { id: string | null; name: string; swatch: string }[] = [
+        { id: null, name: va.originalName?.trim() || tr(this.lang, "original"), swatch: va.original ?? "" },
+        ...va.options.map((o) => ({ id: o.id, name: o.name, swatch: o.id })),
+      ];
+      for (const ch of choices) {
+        const b = document.createElement("button"); b.type = "button";
+        b.className = "av-var-b" + (ch.id === active ? " on" : "");
+        const sw = document.createElement("i"); sw.style.background = ch.swatch ? this.swatchCss(ch.swatch) : "#ddd";
+        if (ch.swatch.includes("~") && this.config?.materials[ch.swatch] && !this.config.materials[ch.swatch].paintable && this.config.materials[ch.swatch].texture !== "none") { sw.style.backgroundBlendMode = "multiply"; }
+        const nm = document.createElement("span"); nm.textContent = ch.name;
+        b.append(sw, nm);
+        b.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.setVariant(va.part, ch.id);
+          if (ch.id) this.variantChoice.set(va.part, ch.id); else this.variantChoice.delete(va.part);
+          row.querySelectorAll(".av-var-b").forEach((x) => x.classList.toggle("on", x === b));
+        });
+        row.append(b);
+      }
+      box.append(cap, row); panel.append(box);
+    }
     panel.classList.add("open");
     if (document.pointerLockElement) document.exitPointerLock();
   }

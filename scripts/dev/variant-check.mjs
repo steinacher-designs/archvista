@@ -1,0 +1,32 @@
+// Website check: info point → "Material ausprobieren" buttons switch the part's material, "Original" restores it.
+import { chromium } from "playwright"; import http from "node:http"; import { readFile } from "node:fs/promises"; import path from "node:path";
+const [dir, out] = process.argv.slice(2);
+const types = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".svg": "image/svg+xml", ".glb": "model/gltf-binary", ".webp": "image/webp", ".hdr": "application/octet-stream" };
+const srv = http.createServer(async (q, r) => { try { let f = decodeURIComponent(q.url.split("?")[0]); if (f.endsWith("/")) f += "index.html"; const buf = await readFile(path.join(dir, f)); r.writeHead(200, { "content-type": types[path.extname(f)] ?? "application/octet-stream" }); r.end(buf); } catch { r.writeHead(404); r.end(); } }).listen(0);
+const b = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
+const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+const res = []; const ok = (n, c, x = "") => res.push(`${c ? "✓" : "✗"} ${n}${x ? " " + x : ""}`);
+await p.goto(`http://localhost:${srv.address().port}/`);
+await p.waitForFunction(() => window.archvista && !document.querySelector(".av-loading"), null, { timeout: 300000 });
+await p.waitForTimeout(1500);
+const mats = () => p.evaluate(() => { const s = new Set(); window.archvista.building.traverse((o) => { if (o.isMesh && o.userData.key === "v1") s.add(o.userData.presetId); }); return [...s]; });
+ok("tagged part present", (await mats()).length === 1, JSON.stringify(await mats()));
+await p.evaluate(() => document.querySelector(".av-hs").click());
+await p.waitForTimeout(600);
+const names = await p.locator(".av-var-b span").allTextContents();
+ok("panel shows Original + 3 options", names.join("|") === "Weiß|Blau|Grün|Klinker", names.join("|"));
+await p.locator(".av-var-b", { hasText: "Blau" }).click(); await p.waitForTimeout(1200);
+ok("Blau applied", (await mats())[0] === "plaster_white~#475480", JSON.stringify(await mats()));
+await p.screenshot({ path: `${out}-blau.png`, timeout: 120000 });
+await p.locator(".av-var-b", { hasText: "Klinker" }).click(); await p.waitForTimeout(2500);
+ok("Klinker applied", (await mats())[0] === "brick");
+await p.screenshot({ path: `${out}-klinker.png`, timeout: 120000 });
+await p.locator(".av-var-b", { hasText: "Weiß" }).click(); await p.waitForTimeout(800);
+ok("Original restored", (await mats())[0] === "plaster_white");
+// reopen panel: current choice stays marked
+await p.locator(".av-var-b", { hasText: "Grün" }).click();
+await p.evaluate(() => document.querySelector(".av-hs").click()); await p.waitForTimeout(400);
+ok("choice marked after reopening", (await p.locator(".av-var-b.on span").textContent()) === "Grün");
+res.push("page errors: " + (errs.length ? errs.join(" | ") : "none"));
+console.log(res.join("\n")); await b.close(); srv.close();

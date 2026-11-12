@@ -3,7 +3,7 @@ import { getViewer } from "../useViewer";
 import { useStore, type Tab, presetLabel } from "../store";
 import { ENVIRONMENTS, TEMPLATES, type Lighting, type Quality, type EnvironmentId, type TemplateId } from "../../core/project";
 import { PRESETS, PRESET, GROUP_LABEL, customPresets, setCustomPresets, textureKey, type MaterialGroup, type MaterialPreset } from "../../core/materials";
-import { textureUrl, envUrl, saveEnv } from "../textures";
+import { textureUrl, envUrl, saveEnv, saveTexture, prepareImage } from "../textures";
 import { CATEGORY_LABEL } from "../../core/analysis/classify";
 import { UNIT_CHOICES } from "../../core/dxf/import";
 import { AreasEditor } from "./Areas";
@@ -240,7 +240,7 @@ function thumbFor(id: string, colour?: string) {
 }
 
 /** Swatch that can also show an own texture image (stored with the project). */
-function Swatch({ id, colour, className }: { id: string; colour?: string; className: string }) {
+export function Swatch({ id, colour, className }: { id: string; colour?: string; className: string }) {
   const projectId = useStore((s) => s.project?.id);
   const pr = PRESET.get(id);
   const [img, setImg] = useState<string | null>(null);
@@ -260,6 +260,14 @@ function Materials() {
   const [open, setOpen] = useState<string | null>(null);
   setCustomPresets(project!.customMaterials);
   const cadList: MaterialPreset[] = customPresets();
+  const cadOnly = cadList.filter((x) => x.group !== "own"), ownList = cadList.filter((x) => x.group === "own");
+  const [adding, setAdding] = useState<string | null>(null);
+  // deleting an own material: surfaces that used it go back to their suggestion, variants drop it
+  const removeOwn = (id: string) => update((p) => {
+    p.customMaterials = (p.customMaterials ?? []).filter((m) => m.id !== id);
+    for (const [k, v] of Object.entries(p.materialOverrides)) if (v.split("~")[0] === id) delete p.materialOverrides[k];
+    for (const h of p.hotspots) if (h.variants) h.variants.options = h.variants.options.filter((o) => o.id.split("~")[0] !== id);
+  });
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const groups = useMemo(() => {
     const m = new Map<string, { key: string; layer: string; category: string; role: string; auto: string; autoColor?: string; cad?: string; reason: string; color: number; tris: number }>();
@@ -309,17 +317,27 @@ function Materials() {
             </button>
             {isOpen && (
               <div className="mpick">
-                {(Object.keys(GROUP_LABEL) as MaterialGroup[]).filter((grp) => grp !== "cad" || cadList.length).map((grp) => (
+                {(Object.keys(GROUP_LABEL) as MaterialGroup[]).filter((grp) => grp !== "cad" || cadOnly.length).map((grp) => (
                   <div key={grp}>
                     <div className="mgl">{GROUP_LABEL[grp][lang]}</div>
                     <div className="mtiles">
-                      {(grp === "cad" ? cadList : PRESETS.filter((x) => x.group === grp)).map((x) => (
-                        <button key={x.id} className={`mtile ${x.id === cur.split("~")[0] ? "on" : ""}`} onClick={() => setMat(g.key, g.auto, x.id)} title={presetLabel(x.id, lang)} data-testid={`tile-${x.id}`}>
-                          <Swatch className="im" id={x.id} />
-                          <span className="nm">{presetLabel(x.id, lang)}</span>
-                        </button>
+                      {(grp === "cad" ? cadOnly : grp === "own" ? ownList : PRESETS.filter((x) => x.group === grp)).map((x) => (
+                        <span key={x.id} className="mtw">
+                          <button className={`mtile ${x.id === cur.split("~")[0] ? "on" : ""}`} onClick={() => setMat(g.key, g.auto, x.id)} title={presetLabel(x.id, lang)} data-testid={`tile-${x.id}`}>
+                            <Swatch className="im" id={x.id} />
+                            <span className="nm">{presetLabel(x.id, lang)}</span>
+                          </button>
+                          {grp === "own" && <button className="mdel" title={de ? "Eigenes Material löschen" : "Delete own material"} aria-label={de ? "Löschen" : "Delete"} onClick={() => removeOwn(x.id)}>×</button>}
+                        </span>
                       ))}
+                      {grp === "own" && (
+                        <button className={`mtile add ${adding === g.key ? "on" : ""}`} onClick={() => setAdding(adding === g.key ? null : g.key)} data-testid="own-add">
+                          <span className="im">＋</span>
+                          <span className="nm">{de ? "Eigenes Material" : "Own material"}</span>
+                        </button>
+                      )}
                     </div>
+                    {grp === "own" && adding === g.key && <OwnMaterialForm onDone={(id) => { setAdding(null); if (id) setMat(g.key, g.auto, id); }} />}
                   </div>
                 ))}
                 <div className="mfoot">
@@ -339,5 +357,68 @@ function Materials() {
         );
       })}
     </>
+  );
+}
+
+/** Own material: a name, a colour or photo, how shiny, and (for photos) how large one tile is. */
+function OwnMaterialForm({ onDone }: { onDone(id: string | null): void }) {
+  const { project, update, lang } = useStore();
+  const de = lang === "de";
+  const [name, setName] = useState("");
+  const [colour, setColour] = useState("#9aa3c4");
+  const [finish, setFinish] = useState<"matt" | "satin" | "gloss">("matt");
+  const [size, setSize] = useState("1");
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { if (!file) { setPreview(null); return; } const u = URL.createObjectURL(file); setPreview(u); return () => URL.revokeObjectURL(u); }, [file]);
+  const create = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const rand = Math.random().toString(36).slice(2, 8);
+      const id = `own:${rand}`;
+      const label = name.trim() || (file ? file.name.replace(/\.[^.]+$/, "") : de ? "Eigenes Material" : "Own material");
+      let image: string | undefined;
+      if (file) {
+        const img = await prepareImage(file);
+        image = textureKey(`own-${rand}-${file.name.replace(/\.[^.]+$/, "")}.${img.ext}`);
+        await saveTexture(project!.id, image, img.bytes);
+      }
+      const rough = finish === "gloss" ? 0.18 : finish === "satin" ? 0.5 : 0.88;
+      const sc = Math.max(0.05, Math.min(50, parseFloat(size.replace(",", ".")) || 1));
+      const pr: MaterialPreset = { id, label: { de: label, en: label }, color: colour, roughness: rough, metalness: 0, texture: "none", scale: image ? sc : 1, group: "own", ...(image ? { image } : {}), ...(finish === "gloss" ? { clearcoat: 0.3 } : {}) };
+      update((p) => { p.customMaterials = [...(p.customMaterials ?? []), pr]; });
+      setCustomPresets([...(project!.customMaterials ?? []), pr]);
+      onDone(id);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setBusy(false); }
+  };
+  return (
+    <div className="ownform" data-testid="own-form">
+      <div className="ownrow">
+        <label className="ownpic" title={de ? "Foto der Oberfläche (optional)" : "Photo of the surface (optional)"} style={{ background: preview ? `url(${preview}) center/cover` : colour }}>
+          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} data-testid="own-file" />
+          {!preview && <span>{de ? "Foto" : "Photo"}</span>}
+        </label>
+        <div className="ownfields">
+          <input className="input" placeholder={de ? "Name, z. B. Stoff Petrol" : "Name, e.g. Petrol fabric"} value={name} onChange={(e) => setName(e.target.value)} data-testid="own-name" />
+          <div className="ownline">
+            {!file && <label className="colorpick" title={de ? "Farbe" : "Colour"}><input type="color" value={colour} onChange={(e) => setColour(e.target.value)} /></label>}
+            <div className="chips">
+              {(["matt", "satin", "gloss"] as const).map((f) => (
+                <button key={f} className={finish === f ? "on" : ""} onClick={() => setFinish(f)}>{de ? { matt: "Matt", satin: "Seidenmatt", gloss: "Glänzend" }[f] : { matt: "Matte", satin: "Satin", gloss: "Glossy" }[f]}</button>
+              ))}
+            </div>
+          </div>
+          {file && <label className="ownsize">{de ? "Ein Foto entspricht" : "One photo covers"} <input className="input" inputMode="decimal" value={size} onChange={(e) => setSize(e.target.value)} /> m</label>}
+        </div>
+      </div>
+      {file && <button className="link" style={{ fontSize: 12.5 }} onClick={() => setFile(null)}>{de ? "Foto entfernen (nur Farbe)" : "Remove photo (colour only)"}</button>}
+      {err && <p style={{ color: "var(--copper)", fontSize: 12.5 }}>{err}</p>}
+      <div className="ownbtns">
+        <button className="btn small ghost" onClick={() => onDone(null)}>{de ? "Abbrechen" : "Cancel"}</button>
+        <button className="btn small" disabled={busy} onClick={() => void create()} data-testid="own-create">{busy ? "…" : de ? "Anlegen & zuweisen" : "Create & assign"}</button>
+      </div>
+    </div>
   );
 }

@@ -23,6 +23,8 @@
 | 3DS-Import (.3ds, auch als ZIP mit Texturen) | ✅ | eigener Chunk-Leser, Tests + echte 3DS-Datei |
 | Orte beim Begehen: Teleport auf den Boden an dieser Stelle (auch für im Umsehen-Modus gespeicherte Orte), Innenorte schalten auf Begehen; Rundgang-Knopf entfernt | ✅ | an SD-193 mit den Orten der veröffentlichten Website geprüft |
 | Materialwahl live (ohne Neuaufbau), Klick auf Fläche, Musterbilder | ✅ | |
+| Eigene Materialien (Name, Farbe oder Foto, matt/seidenmatt/glänzend, Kachelgröße), bleiben beim Neu-Einlesen erhalten | ✅ | Test + Browser-Prüfung (scripts/dev/variant-app.mjs) |
+| Infopunkt-Zusatz „Material zum Ausprobieren“: bis zu 3 Varianten pro Bauteil, Besucher schalten auf der Website um | ✅ | tests/variants.test.ts, Website-Prüfung scripts/dev/variant-check.mjs; Bauteile nur mit anonymem Kürzel („v1“) in der GLB |
 | VR-Brillen (WebXR): gehen mit Stick, 30°-Drehung, Kollision | ✅ | mit WebXR-Emulator (iwer, Quest 3) getestet, nicht an echter Brille |
 | GitHub-Veröffentlichung (Geräte-Anmeldung, inkrementell, Pages, Live-Prüfung) | ✅ simuliert · 🟡 echt | OAuth-App „ARCHVISTA“ (Device Flow) registriert; echte Testseite https://steinacher-designs.github.io/archvista-test/ nach 30 s online, alle Dateien korrekt unter Unterpfad, Desktop + Handy ohne Fehler. Der Veröffentlichen-Knopf selbst wird im Abschlusstest auf Windows geprüft. |
 | Offline-Export | ✅ | |

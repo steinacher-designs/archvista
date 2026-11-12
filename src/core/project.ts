@@ -35,6 +35,19 @@ export interface Hotspot {
   materialSpec?: string;
   auto?: boolean;
   level?: number;
+  /** Optional add-on: visitors try other materials on one model part (e.g. a sofa in white, blue, green). */
+  variants?: HotspotVariants;
+}
+
+export interface HotspotVariants {
+  /** Model part the variants apply to (part key in the app; an anonymous tag like "v1" on the website). */
+  part: string;
+  /** Name of the part's own material as shown to visitors (default "Original"). */
+  originalName?: string;
+  /** Website only: the part's current material, for the swatch. */
+  original?: string;
+  /** Up to three alternatives: material id (may carry a colour, "preset~#hex") and a name. */
+  options: { id: string; name: string }[];
 }
 
 export interface Viewpoint {
@@ -97,7 +110,7 @@ export interface Project {
   materialOverrides: Record<string, string>; // part key → preset id
   /** Optional user colour per part key (hex). */
   materialColors?: Record<string, string>;
-  /** Materials with own texture images, taken from the CAD file's ZIP (id "img:…"). */
+  /** Materials with own texture images: from the CAD file (id "img:…", group "cad") or added by the user (id "own:…", group "own"). */
   customMaterials?: MaterialPreset[];
   viewpoints: Viewpoint[];
   /** User-defined places, shown after the storeys. */

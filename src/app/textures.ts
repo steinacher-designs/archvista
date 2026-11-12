@@ -39,3 +39,23 @@ export async function saveEnv(projectId: string, file: string, bytes: Uint8Array
   await platform.saveDocument(projectId, envDocId(file), bytes);
   envUrls.delete(`${projectId}/${file}`);
 }
+
+// ——— own materials: a photo the user adds (kept small enough for websites) ———
+/** Reads an image file; very large photos are scaled down to 2048 px and stored as JPEG. */
+export async function prepareImage(file: File): Promise<{ bytes: Uint8Array; ext: string }> {
+  const raw = new Uint8Array(await file.arrayBuffer());
+  const ext = /\.png$/i.test(file.name) ? "png" : /\.webp$/i.test(file.name) ? "webp" : "jpg";
+  let bmp: ImageBitmap;
+  try { bmp = await createImageBitmap(new Blob([raw as BlobPart], { type: mime(file.name) })); } catch { throw new Error("Das Bild konnte nicht gelesen werden. Bitte JPG, PNG oder WebP verwenden."); }
+  const max = 2048;
+  if (bmp.width <= max && bmp.height <= max && raw.length < 4_000_000) { bmp.close(); return { bytes: raw, ext }; }
+  const f = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * f); c.height = Math.round(bmp.height * f);
+  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close();
+  const keepAlpha = ext === "png";
+  const blob = await new Promise<Blob | null>((r) => c.toBlob(r, keepAlpha ? "image/png" : "image/jpeg", 0.88));
+  if (!blob) return { bytes: raw, ext };
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), ext: keepAlpha ? "png" : "jpg" };
+}

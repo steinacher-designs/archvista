@@ -136,7 +136,9 @@ export const useStore = create<State>((set, get) => ({
     // images: from a ZIP, or embedded in a SketchUp file (those are re-read from the .skp every time)
     const imgs = [...(images ?? []), ...(res.images ?? [])];
     // SketchUp files carry their textures: always re-read, so improvements to the import reach existing projects too
-    if (imgs.length && (images?.length || format === "skp" || !existing?.customMaterials)) customs = await cadTextures(existing?.id ?? newProject(fileName, hash).id, res.model, imgs);
+    // the user's own materials are never touched by a re-import
+    const own = (existing?.customMaterials ?? []).filter((m) => m.group === "own");
+    if (imgs.length && (images?.length || format === "skp" || !existing?.customMaterials?.some((m) => m.group !== "own"))) customs = [...await cadTextures(existing?.id ?? newProject(fileName, hash).id, res.model, imgs), ...own];
     applyCadTextures(res.scene, customs);
     if (format !== "skp") noteMissingTextures(res.model, customs, !!images?.length, get().lang);
     let project = existing ?? automatic({ ...newProject(fileName, hash), ...(customs?.length ? { customMaterials: customs } : {}) }, res.scene, res.model);
