@@ -1350,6 +1350,11 @@ function finalize(b, insunitsPairs, version, opts, progress, rawMaterials = /* @
     const reduced = simplifyToBudget(parts, Math.max(IMPORT_BUDGET - otherTris, IMPORT_BUDGET / 4)).parts;
     for (const p of reduced) {
       if (!p.indices.length) continue;
+      if (p.indices.length / 3 <= 15e5) {
+        const r = orientConsistently(p.positions, p.indices);
+        flipped += r.flipped;
+        outward += r.outward;
+      }
       const flat = flatten(p.positions, p.indices);
       for (let i = 0; i < flat.positions.length; i += 3)
         for (let k = 0; k < 3; k++) {

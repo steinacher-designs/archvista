@@ -214,6 +214,11 @@ export function finalize(
     const reduced = simplifyToBudget(parts, Math.max(IMPORT_BUDGET - otherTris, IMPORT_BUDGET / 4)).parts;
     for (const p of reduced) {
       if (!p.indices.length) continue;
+      // consistent winding (closed shells outward), so floors face up – needed to find the storeys
+      if (p.indices.length / 3 <= 1_500_000) {
+        const r = orientConsistently(p.positions as unknown as number[], p.indices as unknown as number[]);
+        flipped += r.flipped; outward += r.outward;
+      }
       const flat = flatten(p.positions, p.indices);
       for (let i = 0; i < flat.positions.length; i += 3)
         for (let k = 0; k < 3; k++) {
