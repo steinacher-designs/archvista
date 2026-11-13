@@ -344,7 +344,8 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
       for (const r of roots) visit(r, ident(), "", 0);
     }
     counting = false;
-    progress(0.35, "Objekte werden gelesen");
+    const nv = [...need.values()].reduce((n, c) => n + c.v, 0), nt = [...need.values()].reduce((n, c) => n + c.i / 3, 0);
+    progress(0.4, `Objekte werden gelesen DEBUG ${nt | 0} tris ${nv} verts cache ${cache.size} keep ${keep.toFixed(3)} world ${worldTris}`);
   }
   for (const r of roots) visit(r, ident(), "", 0);
   progress(0.6, "Modell wird optimiert");
