@@ -2,7 +2,7 @@
 
 import { readDxf, num, type RawMaterial, type ByteSource } from "./reader";
 import { buildGeometry, BuildResult, estimateTriangles, roughExtent } from "./build";
-import { LARGE_MODEL_TRIANGLES, IMPORT_BUDGET } from "../weld";
+import { LARGE_MODEL_TRIANGLES, IMPORT_BUDGET, dedupeTriangles } from "../weld";
 import { simplifyToBudget } from "../simplify";
 
 export type UnitSource = "header" | "guess" | "user";
@@ -206,7 +206,10 @@ export function finalize(
       const positions = new Float32Array(P.length);
       for (let i = 0; i < P.length; i += 3) { positions[i] = P[i] * s - origin[0]; positions[i + 1] = P[i + 2] * s - origin[1]; positions[i + 2] = -P[i + 1] * s - origin[2]; }
       removedDegenerate += w.dropped;
-      const indices = w.idx.take();
+      // front and back copies of the same face (SketchUp exports) → one
+      const dd = dedupeTriangles(w.idx.view());
+      removedDuplicate += dd.removed;
+      const indices = dd.indices;
       g.weld = undefined; // free the welder
       return { g, positions, normals: new Float32Array(positions.length), uvs: new Float32Array((positions.length / 3) * 2), indices };
     });

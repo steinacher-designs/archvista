@@ -52,6 +52,7 @@ export class GrowU32 {
   }
   push(v: number) { if (this.n === this.a.length) this.reserve(1); this.a[this.n++] = v; }
   take() { return this.a.slice(0, this.n); }
+  view() { return this.a.subarray(0, this.n); }
 }
 
 /**
@@ -125,3 +126,33 @@ export class Welder {
 export const LARGE_MODEL_TRIANGLES = 3_000_000;
 /** Triangles a large model is brought down to while reading (fine details only). */
 export const IMPORT_BUDGET = 2_500_000;
+
+/**
+ * Removes triangles that use the same three vertices as an earlier one (in any order) – e.g. the front
+ * and back copy of a face. Typed-array hash set, no JS Map.
+ */
+export function dedupeTriangles(I: Uint32Array): { indices: Uint32Array; removed: number } {
+  const n = I.length / 3;
+  let size = 64; while (size < n * 2) size *= 2;
+  const mask = size - 1;
+  const keys = new Uint32Array(size * 3), used = new Uint8Array(size);
+  const out = new Uint32Array(I.length);
+  let o = 0;
+  for (let t = 0; t < n; t++) {
+    let a = I[t * 3], b = I[t * 3 + 1], c = I[t * 3 + 2];
+    // sort the three ids
+    if (a > b) { const x = a; a = b; b = x; }
+    if (b > c) { const x = b; b = c; c = x; }
+    if (a > b) { const x = a; a = b; b = x; }
+    let h = (Math.imul(a, 73856093) ^ Math.imul(b, 19349663) ^ Math.imul(c, 83492791)) & mask;
+    let dup = false;
+    while (used[h]) {
+      if (keys[h * 3] === a && keys[h * 3 + 1] === b && keys[h * 3 + 2] === c) { dup = true; break; }
+      h = (h + 1) & mask;
+    }
+    if (dup) continue;
+    used[h] = 1; keys[h * 3] = a; keys[h * 3 + 1] = b; keys[h * 3 + 2] = c;
+    out[o++] = I[t * 3]; out[o++] = I[t * 3 + 1]; out[o++] = I[t * 3 + 2];
+  }
+  return { indices: out.slice(0, o), removed: n - o / 3 };
+}

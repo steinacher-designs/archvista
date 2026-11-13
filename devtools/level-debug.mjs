@@ -115,6 +115,9 @@ var GrowU32 = class {
   take() {
     return this.a.slice(0, this.n);
   }
+  view() {
+    return this.a.subarray(0, this.n);
+  }
 };
 var Welder = class {
   constructor(cell) {
@@ -197,6 +200,51 @@ var Welder = class {
 };
 var LARGE_MODEL_TRIANGLES = 3e6;
 var IMPORT_BUDGET = 25e5;
+function dedupeTriangles(I) {
+  const n = I.length / 3;
+  let size2 = 64;
+  while (size2 < n * 2) size2 *= 2;
+  const mask = size2 - 1;
+  const keys = new Uint32Array(size2 * 3), used = new Uint8Array(size2);
+  const out = new Uint32Array(I.length);
+  let o = 0;
+  for (let t = 0; t < n; t++) {
+    let a = I[t * 3], b = I[t * 3 + 1], c = I[t * 3 + 2];
+    if (a > b) {
+      const x = a;
+      a = b;
+      b = x;
+    }
+    if (b > c) {
+      const x = b;
+      b = c;
+      c = x;
+    }
+    if (a > b) {
+      const x = a;
+      a = b;
+      b = x;
+    }
+    let h = (Math.imul(a, 73856093) ^ Math.imul(b, 19349663) ^ Math.imul(c, 83492791)) & mask;
+    let dup = false;
+    while (used[h]) {
+      if (keys[h * 3] === a && keys[h * 3 + 1] === b && keys[h * 3 + 2] === c) {
+        dup = true;
+        break;
+      }
+      h = h + 1 & mask;
+    }
+    if (dup) continue;
+    used[h] = 1;
+    keys[h * 3] = a;
+    keys[h * 3 + 1] = b;
+    keys[h * 3 + 2] = c;
+    out[o++] = I[t * 3];
+    out[o++] = I[t * 3 + 1];
+    out[o++] = I[t * 3 + 2];
+  }
+  return { indices: out.slice(0, o), removed: n - o / 3 };
+}
 
 // src/core/dxf/reader.ts
 var DxfFormatError = class extends Error {
@@ -1319,7 +1367,9 @@ function finalize(b, insunitsPairs, version, opts, progress, rawMaterials = /* @
         positions[i + 2] = -P[i + 1] * s - origin[2];
       }
       removedDegenerate += w.dropped;
-      const indices = w.idx.take();
+      const dd = dedupeTriangles(w.idx.view());
+      removedDuplicate += dd.removed;
+      const indices = dd.indices;
       g.weld = void 0;
       return { g, positions, normals: new Float32Array(positions.length), uvs: new Float32Array(positions.length / 3 * 2), indices };
     });
