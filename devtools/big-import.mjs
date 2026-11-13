@@ -53,6 +53,174 @@ function aciToRgb(index) {
   return ACI[i];
 }
 
+// src/core/weld.ts
+var GrowF64 = class {
+  a;
+  n = 0;
+  constructor(cap = 1024) {
+    this.a = new Float64Array(cap);
+  }
+  reserve(k) {
+    if (this.n + k <= this.a.length) return;
+    let c = this.a.length * 2;
+    while (c < this.n + k) c *= 2;
+    const b = new Float64Array(c);
+    b.set(this.a.subarray(0, this.n));
+    this.a = b;
+  }
+  push(v) {
+    if (this.n === this.a.length) this.reserve(1);
+    this.a[this.n++] = v;
+  }
+  view() {
+    return this.a.subarray(0, this.n);
+  }
+};
+var GrowI32 = class {
+  a;
+  n = 0;
+  constructor(cap = 1024) {
+    this.a = new Int32Array(cap);
+  }
+  push(v) {
+    if (this.n === this.a.length) {
+      const b = new Int32Array(this.a.length * 2);
+      b.set(this.a);
+      this.a = b;
+    }
+    this.a[this.n++] = v;
+  }
+  view() {
+    return this.a.subarray(0, this.n);
+  }
+};
+var GrowF32 = class {
+  a;
+  n = 0;
+  constructor(cap = 1024) {
+    this.a = new Float32Array(cap);
+  }
+  reserve(k) {
+    if (this.n + k <= this.a.length) return;
+    let c = this.a.length * 2;
+    while (c < this.n + k) c *= 2;
+    const b = new Float32Array(c);
+    b.set(this.a.subarray(0, this.n));
+    this.a = b;
+  }
+  push(v) {
+    if (this.n === this.a.length) this.reserve(1);
+    this.a[this.n++] = v;
+  }
+  /** Exact-size copy (frees the spare capacity). */
+  take() {
+    return this.a.slice(0, this.n);
+  }
+};
+var GrowU32 = class {
+  a;
+  n = 0;
+  constructor(cap = 1024) {
+    this.a = new Uint32Array(cap);
+  }
+  reserve(k) {
+    if (this.n + k <= this.a.length) return;
+    let c = this.a.length * 2;
+    while (c < this.n + k) c *= 2;
+    const b = new Uint32Array(c);
+    b.set(this.a.subarray(0, this.n));
+    this.a = b;
+  }
+  push(v) {
+    if (this.n === this.a.length) this.reserve(1);
+    this.a[this.n++] = v;
+  }
+  take() {
+    return this.a.slice(0, this.n);
+  }
+};
+var Welder = class {
+  constructor(cell) {
+    this.cell = cell;
+    this.inv = 1 / cell;
+    this.mask = 31;
+    this.keys = new Int32Array(32 * 3);
+    this.vals = new Int32Array(32).fill(-1);
+  }
+  cell;
+  inv;
+  keys;
+  vals;
+  mask;
+  used = 0;
+  pos = new GrowF64(48);
+  idx = new GrowU32(48);
+  /** triangles offered / dropped because they collapsed */
+  offered = 0;
+  dropped = 0;
+  get vertexCount() {
+    return this.pos.n / 3;
+  }
+  get triangleCount() {
+    return this.idx.n / 3;
+  }
+  grow() {
+    const oldK = this.keys, oldV = this.vals;
+    const size2 = oldV.length * 2;
+    this.keys = new Int32Array(size2 * 3);
+    this.vals = new Int32Array(size2).fill(-1);
+    this.mask = size2 - 1;
+    for (let s = 0; s < oldV.length; s++) {
+      if (oldV[s] < 0) continue;
+      const x = oldK[s * 3], y = oldK[s * 3 + 1], z = oldK[s * 3 + 2];
+      let h = this.hash(x, y, z);
+      while (this.vals[h] >= 0) h = h + 1 & this.mask;
+      this.keys[h * 3] = x;
+      this.keys[h * 3 + 1] = y;
+      this.keys[h * 3 + 2] = z;
+      this.vals[h] = oldV[s];
+    }
+  }
+  hash(x, y, z) {
+    return (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) & this.mask;
+  }
+  vertex(x, y, z) {
+    const ix = Math.floor(x * this.inv) | 0, iy = Math.floor(y * this.inv) | 0, iz = Math.floor(z * this.inv) | 0;
+    let h = this.hash(ix, iy, iz);
+    for (; ; ) {
+      const v = this.vals[h];
+      if (v < 0) break;
+      if (this.keys[h * 3] === ix && this.keys[h * 3 + 1] === iy && this.keys[h * 3 + 2] === iz) return v;
+      h = h + 1 & this.mask;
+    }
+    const id = this.pos.n / 3;
+    this.keys[h * 3] = ix;
+    this.keys[h * 3 + 1] = iy;
+    this.keys[h * 3 + 2] = iz;
+    this.vals[h] = id;
+    this.pos.reserve(3);
+    this.pos.a[this.pos.n++] = x;
+    this.pos.a[this.pos.n++] = y;
+    this.pos.a[this.pos.n++] = z;
+    if (++this.used * 2 > this.vals.length) this.grow();
+    return id;
+  }
+  tri(ax, ay, az, bx, by, bz, cx, cy, cz) {
+    this.offered++;
+    const a = this.vertex(ax, ay, az), b = this.vertex(bx, by, bz), c = this.vertex(cx, cy, cz);
+    if (a === b || b === c || a === c) {
+      this.dropped++;
+      return;
+    }
+    this.idx.reserve(3);
+    this.idx.a[this.idx.n++] = a;
+    this.idx.a[this.idx.n++] = b;
+    this.idx.a[this.idx.n++] = c;
+  }
+};
+var LARGE_MODEL_TRIANGLES = 3e6;
+var IMPORT_BUDGET = 25e5;
+
 // src/core/dxf/reader.ts
 var DxfFormatError = class extends Error {
   constructor(message) {
@@ -178,6 +346,42 @@ function readRecord(cur, type) {
   }
   return { type, pairs };
 }
+function readMesh(cur) {
+  const pairs = [];
+  const verts = new GrowF64(3 * 64);
+  const list = new GrowI32(64);
+  let state = "attr";
+  let vLeft = 0, fLeft = 0;
+  for (; ; ) {
+    const p = cur.peek();
+    if (!p || p[0] === 0) break;
+    cur.next();
+    const [c, v] = p;
+    if (state === "verts" && (c === 10 || c === 20 || c === 30)) {
+      verts.push(parseFloat(v) || 0);
+      if (c === 30 && --vLeft <= 0) state = "rest";
+      continue;
+    }
+    if (state === "faces" && c === 90) {
+      list.push(parseInt(v, 10) || 0);
+      if (--fLeft <= 0) state = "rest";
+      continue;
+    }
+    if (c === 92 && state === "attr") {
+      vLeft = parseInt(v, 10) || 0;
+      state = vLeft > 0 ? "verts" : "rest";
+      continue;
+    }
+    if (c === 93 && list.n === 0) {
+      fLeft = parseInt(v, 10) || 0;
+      state = fLeft > 0 ? "faces" : "rest";
+      continue;
+    }
+    if (state === "rest" && (c === 90 || c === 140 || c === 10 || c === 20 || c === 30)) continue;
+    if (state !== "verts" && state !== "faces") pairs.push(p);
+  }
+  return { type: "MESH", pairs, mesh: { verts: verts.view().slice(), list: list.view().slice() } };
+}
 function readEntityList(cur, terminators) {
   const list = [];
   for (; ; ) {
@@ -189,7 +393,7 @@ function readEntityList(cur, terminators) {
       readRecord(cur, type);
       return { list, end: type };
     }
-    const ent = readRecord(cur, type);
+    const ent = type === "MESH" ? readMesh(cur) : readRecord(cur, type);
     if (type === "3DFACE") {
       addFace(list, ent);
       continue;
@@ -363,156 +567,6 @@ function readBlocks(cur, out) {
   }
 }
 
-// src/core/weld.ts
-var GrowF64 = class {
-  a;
-  n = 0;
-  constructor(cap = 1024) {
-    this.a = new Float64Array(cap);
-  }
-  reserve(k) {
-    if (this.n + k <= this.a.length) return;
-    let c = this.a.length * 2;
-    while (c < this.n + k) c *= 2;
-    const b = new Float64Array(c);
-    b.set(this.a.subarray(0, this.n));
-    this.a = b;
-  }
-  push(v) {
-    if (this.n === this.a.length) this.reserve(1);
-    this.a[this.n++] = v;
-  }
-  view() {
-    return this.a.subarray(0, this.n);
-  }
-};
-var GrowF32 = class {
-  a;
-  n = 0;
-  constructor(cap = 1024) {
-    this.a = new Float32Array(cap);
-  }
-  reserve(k) {
-    if (this.n + k <= this.a.length) return;
-    let c = this.a.length * 2;
-    while (c < this.n + k) c *= 2;
-    const b = new Float32Array(c);
-    b.set(this.a.subarray(0, this.n));
-    this.a = b;
-  }
-  push(v) {
-    if (this.n === this.a.length) this.reserve(1);
-    this.a[this.n++] = v;
-  }
-  /** Exact-size copy (frees the spare capacity). */
-  take() {
-    return this.a.slice(0, this.n);
-  }
-};
-var GrowU32 = class {
-  a;
-  n = 0;
-  constructor(cap = 1024) {
-    this.a = new Uint32Array(cap);
-  }
-  reserve(k) {
-    if (this.n + k <= this.a.length) return;
-    let c = this.a.length * 2;
-    while (c < this.n + k) c *= 2;
-    const b = new Uint32Array(c);
-    b.set(this.a.subarray(0, this.n));
-    this.a = b;
-  }
-  push(v) {
-    if (this.n === this.a.length) this.reserve(1);
-    this.a[this.n++] = v;
-  }
-  take() {
-    return this.a.slice(0, this.n);
-  }
-};
-var Welder = class {
-  constructor(cell) {
-    this.cell = cell;
-    this.inv = 1 / cell;
-    this.mask = 31;
-    this.keys = new Int32Array(32 * 3);
-    this.vals = new Int32Array(32).fill(-1);
-  }
-  cell;
-  inv;
-  keys;
-  vals;
-  mask;
-  used = 0;
-  pos = new GrowF64(48);
-  idx = new GrowU32(48);
-  /** triangles offered / dropped because they collapsed */
-  offered = 0;
-  dropped = 0;
-  get vertexCount() {
-    return this.pos.n / 3;
-  }
-  get triangleCount() {
-    return this.idx.n / 3;
-  }
-  grow() {
-    const oldK = this.keys, oldV = this.vals;
-    const size2 = oldV.length * 2;
-    this.keys = new Int32Array(size2 * 3);
-    this.vals = new Int32Array(size2).fill(-1);
-    this.mask = size2 - 1;
-    for (let s = 0; s < oldV.length; s++) {
-      if (oldV[s] < 0) continue;
-      const x = oldK[s * 3], y = oldK[s * 3 + 1], z = oldK[s * 3 + 2];
-      let h = this.hash(x, y, z);
-      while (this.vals[h] >= 0) h = h + 1 & this.mask;
-      this.keys[h * 3] = x;
-      this.keys[h * 3 + 1] = y;
-      this.keys[h * 3 + 2] = z;
-      this.vals[h] = oldV[s];
-    }
-  }
-  hash(x, y, z) {
-    return (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) & this.mask;
-  }
-  vertex(x, y, z) {
-    const ix = Math.floor(x * this.inv) | 0, iy = Math.floor(y * this.inv) | 0, iz = Math.floor(z * this.inv) | 0;
-    let h = this.hash(ix, iy, iz);
-    for (; ; ) {
-      const v = this.vals[h];
-      if (v < 0) break;
-      if (this.keys[h * 3] === ix && this.keys[h * 3 + 1] === iy && this.keys[h * 3 + 2] === iz) return v;
-      h = h + 1 & this.mask;
-    }
-    const id = this.pos.n / 3;
-    this.keys[h * 3] = ix;
-    this.keys[h * 3 + 1] = iy;
-    this.keys[h * 3 + 2] = iz;
-    this.vals[h] = id;
-    this.pos.reserve(3);
-    this.pos.a[this.pos.n++] = x;
-    this.pos.a[this.pos.n++] = y;
-    this.pos.a[this.pos.n++] = z;
-    if (++this.used * 2 > this.vals.length) this.grow();
-    return id;
-  }
-  tri(ax, ay, az, bx, by, bz, cx, cy, cz) {
-    this.offered++;
-    const a = this.vertex(ax, ay, az), b = this.vertex(bx, by, bz), c = this.vertex(cx, cy, cz);
-    if (a === b || b === c || a === c) {
-      this.dropped++;
-      return;
-    }
-    this.idx.reserve(3);
-    this.idx.a[this.idx.n++] = a;
-    this.idx.a[this.idx.n++] = b;
-    this.idx.a[this.idx.n++] = c;
-  }
-};
-var LARGE_MODEL_TRIANGLES = 3e6;
-var IMPORT_BUDGET = 25e5;
-
 // src/core/dxf/math.ts
 function identity() {
   const m = new Float64Array(16);
@@ -638,7 +692,7 @@ function estimateTriangles(dxf) {
     for (const e of ents) {
       if (e.faces) n += e.faces.tris;
       else if (e.type === "POLYLINE") n += e.children?.length ?? 0;
-      else if (e.type === "MESH") n += e.pairs.length / 4;
+      else if (e.type === "MESH") n += e.mesh ? Math.max(e.mesh.list.length / 4, e.mesh.verts.length / 3) : e.pairs.length / 4;
       else if (e.type === "INSERT") {
         const name = (str(e.pairs, 2) || "").toUpperCase();
         if (stack.includes(name) || stack.length > 32) continue;
@@ -904,6 +958,21 @@ function buildGeometry(dxf, opts = {}) {
   const mesh = (e, M, flip, g) => {
     const P = e.pairs;
     if (num(P, 91, 0) > 0) res.meshWithSubdivision++;
+    if (e.mesh) {
+      const V = e.mesh.verts, L = e.mesh.list, nv = V.length / 3;
+      for (let k = 0; k < L.length; ) {
+        const n = L[k++];
+        if (n <= 0) break;
+        const poly = [];
+        for (let j = 0; j < n && k + j < L.length; j++) {
+          const vi = L[k + j];
+          if (vi >= 0 && vi < nv) poly.push([V[vi * 3], V[vi * 3 + 1], V[vi * 3 + 2]]);
+        }
+        k += n;
+        if (poly.length >= 3) fan(g, M, flip, poly);
+      }
+      return;
+    }
     let i = 0;
     const vCount = (() => {
       for (; i < P.length; i++) if (P[i][0] === 92) return parseInt(P[i++][1], 10);

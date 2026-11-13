@@ -1,5 +1,6 @@
 // ARCHVISTA — low-level ASCII DXF reader.
 import { aciToRgb } from "./color";
+import { GrowF64, GrowI32 } from "../weld";
 // Turns the group-code/value stream into sections, tables, blocks and raw entities.
 // Written from the public DXF reference; no third-party code.
 
@@ -13,6 +14,8 @@ export interface RawEntity {
   /** "@FACES": many 3DFACEs with identical attributes (layer, colour, material …), coordinates only. */
   faces?: FaceBatch;
   sig?: string;
+  /** MESH read straight into numbers: vertex coordinates and the face list (n, i1 … in, n, …). */
+  mesh?: { verts: Float64Array; list: Int32Array };
 }
 
 export interface RawBlock {
@@ -173,6 +176,28 @@ function readRecord(cur: PairCursor, type: string): RawEntity {
   return { type, pairs };
 }
 
+/** MESH: vertices (group 92 count, then 10/20/30) and face list (93 size, then 90 values) as numbers. */
+function readMesh(cur: PairCursor): RawEntity {
+  const pairs: Pair[] = [];
+  const verts = new GrowF64(3 * 64);
+  const list = new GrowI32(64);
+  let state: "attr" | "verts" | "faces" | "rest" = "attr";
+  let vLeft = 0, fLeft = 0;
+  for (;;) {
+    const p = cur.peek();
+    if (!p || p[0] === 0) break;
+    cur.next();
+    const [c, v] = p;
+    if (state === "verts" && (c === 10 || c === 20 || c === 30)) { verts.push(parseFloat(v) || 0); if (c === 30 && --vLeft <= 0) state = "rest"; continue; }
+    if (state === "faces" && c === 90) { list.push(parseInt(v, 10) || 0); if (--fLeft <= 0) state = "rest"; continue; }
+    if (c === 92 && state === "attr") { vLeft = parseInt(v, 10) || 0; state = vLeft > 0 ? "verts" : "rest"; continue; }
+    if (c === 93 && list.n === 0) { fLeft = parseInt(v, 10) || 0; state = fLeft > 0 ? "faces" : "rest"; continue; }
+    if (state === "rest" && (c === 90 || c === 140 || c === 10 || c === 20 || c === 30)) continue; // edges, creases, overrides
+    if (state !== "verts" && state !== "faces") pairs.push(p);
+  }
+  return { type: "MESH", pairs, mesh: { verts: verts.view().slice(), list: list.view().slice() } };
+}
+
 function readEntityList(cur: PairCursor, terminators: Set<string>): { list: RawEntity[]; end: string | null } {
   const list: RawEntity[] = [];
   for (;;) {
@@ -184,7 +209,7 @@ function readEntityList(cur: PairCursor, terminators: Set<string>): { list: RawE
       readRecord(cur, type); // consume terminator body
       return { list, end: type };
     }
-    const ent = readRecord(cur, type);
+    const ent = type === "MESH" ? readMesh(cur) : readRecord(cur, type);
     if (type === "3DFACE") { addFace(list, ent); continue; }
     if (type === "POLYLINE") {
       ent.children = readChildren(cur, "VERTEX");

@@ -17,6 +17,14 @@ export class GrowF64 {
   view() { return this.a.subarray(0, this.n); }
 }
 
+export class GrowI32 {
+  a: Int32Array;
+  n = 0;
+  constructor(cap = 1024) { this.a = new Int32Array(cap); }
+  push(v: number) { if (this.n === this.a.length) { const b = new Int32Array(this.a.length * 2); b.set(this.a); this.a = b; } this.a[this.n++] = v; }
+  view() { return this.a.subarray(0, this.n); }
+}
+
 export class GrowF32 {
   a: Float32Array;
   n = 0;

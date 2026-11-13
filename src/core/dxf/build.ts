@@ -42,7 +42,7 @@ export function estimateTriangles(dxf: RawDxf): number {
     for (const e of ents) {
       if (e.faces) n += e.faces.tris;
       else if (e.type === "POLYLINE") n += (e.children?.length ?? 0);
-      else if (e.type === "MESH") n += e.pairs.length / 4;
+      else if (e.type === "MESH") n += e.mesh ? Math.max(e.mesh.list.length / 4, e.mesh.verts.length / 3) : e.pairs.length / 4;
       else if (e.type === "INSERT") {
         const name = (str(e.pairs, 2) || "").toUpperCase();
         if (stack.includes(name) || stack.length > 32) continue;
@@ -325,6 +325,18 @@ export function buildGeometry(dxf: RawDxf, opts: { weldCell?: number } = {}): Bu
   const mesh = (e: RawEntity, M: Mat4, flip: boolean, g: TriGroup) => {
     const P = e.pairs;
     if (num(P, 91, 0) > 0) res.meshWithSubdivision++;
+    if (e.mesh) {
+      const V = e.mesh.verts, L = e.mesh.list, nv = V.length / 3;
+      for (let k = 0; k < L.length; ) {
+        const n = L[k++];
+        if (n <= 0) break;
+        const poly: V3[] = [];
+        for (let j = 0; j < n && k + j < L.length; j++) { const vi = L[k + j]; if (vi >= 0 && vi < nv) poly.push([V[vi * 3], V[vi * 3 + 1], V[vi * 3 + 2]]); }
+        k += n;
+        if (poly.length >= 3) fan(g, M, flip, poly);
+      }
+      return;
+    }
     let i = 0;
     const vCount = (() => { for (; i < P.length; i++) if (P[i][0] === 92) return parseInt(P[i++][1], 10); return 0; })();
     const vs: V3[] = [];
