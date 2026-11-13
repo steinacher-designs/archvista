@@ -3,6 +3,7 @@ import { openSync, readSync, fstatSync } from "node:fs";
 import { importDxf } from "../../src/core/dxf/import";
 import { importTds } from "../../src/core/tds/import";
 import { importGltf } from "../../src/core/gltf/import";
+import { importSkp } from "../../src/core/skp/import";
 import { prepareScene } from "../../src/core/scene";
 const f = process.argv[2];
 const fd = openSync(f, "r"), size = fstatSync(fd).size;
@@ -12,7 +13,7 @@ let peak = 0; const tick = setInterval(() => { peak = Math.max(peak, process.mem
 const t0 = Date.now(); let lastP = "";
 const onProgress = (fr: number, l: string) => { const s = `${l} ${Math.round(fr * 100)}%`; if (s !== lastP && Math.round(fr * 100) % 10 === 0) { lastP = s; console.log(`  ${((Date.now() - t0) / 1000).toFixed(0)}s ${s} · ${mem()}`); } };
 const whole = () => src.read(0, size);
-const model = /\.dxf$/i.test(f) ? importDxf(src, { onProgress }) : /\.3ds$/i.test(f) ? importTds(whole(), { onProgress }) : importGltf(whole(), { onProgress }).model;
+const model = /\.dxf$/i.test(f) ? importDxf(src, { onProgress }) : /\.3ds$/i.test(f) ? importTds(whole(), { onProgress }) : /\.skp$/i.test(f) ? importSkp(whole(), { onProgress }).model : importGltf(whole(), { onProgress }).model;
 const t1 = Date.now();
 console.log("import", (t1 - t0) / 1000, "s · triangles", model.stats.triangles, "· ok", model.ok, "·", mem(), "· warnings", model.warnings.map((w) => w.code).join(","));
 console.log("bbox", JSON.stringify(model.bbox), "units", model.units.name);

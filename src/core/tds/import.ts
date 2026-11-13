@@ -88,6 +88,10 @@ export function importTds(bytes: Uint8Array, opts: ImportOptions = {}): Imported
     return g;
   };
   const objs = editorItems.filter((k) => k.id === C.OBJECT);
+  const generic = (n: string) => /^(object|obj|mesh|m|g|box|line)?[\s_#-]*\d+$/i.test(n.trim()) || !n.trim();
+  const sample = objs.slice(0, 500).map((o) => cstr(o.start, o.end)[0]);
+  const byMaterial = objs.length > 2000 && sample.filter(generic).length > sample.length * 0.8;
+  const faceMatName = (fm: (string | undefined)[]) => { for (const m of fm) if (m) return materials.get(m.toUpperCase())?.name ?? m; return undefined; };
   // very large files: count faces and measure first; then points are welded on a 1 cm grid while reading
   let weldCell: number | undefined;
   {
@@ -138,7 +142,9 @@ export function importTds(bytes: Uint8Array, opts: ImportOptions = {}): Imported
         const n = dv.getUint16(p, true);
         for (let i = 0; i < n; i++) { const f = dv.getUint16(p + 2 + i * 2, true); if (f < nf) faceMat[f] = mn; }
       }
-      const layer = name || `Objekt ${objects}`;
+      // many objects with bare numbers as names ("M10472", "Object123") say nothing about the part:
+      // then the material groups them (otherwise thousands of separate parts)
+      const layer = byMaterial ? (faceMatName(faceMat) ?? "3DS") : name || `Objekt ${objects}`;
       for (let f = 0; f < nf; f++) {
         const at = fc.start + 2 + f * 8;
         const a = dv.getUint16(at, true), b = dv.getUint16(at + 2, true), c = dv.getUint16(at + 4, true);
