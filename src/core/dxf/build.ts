@@ -1,5 +1,6 @@
 // ARCHVISTA — DXF geometry reconstruction: raw entities → triangle soup grouped by layer & colour.
 
+import { Welder } from "../weld";
 import { RawDxf, RawEntity, Pair, num, str } from "./reader";
 import { aciToRgb } from "./color";
 import { Mat4, V3, identity, mul, translate, scale, rotZ, apply, applyDir, det3, ocsMatrix } from "./math";
@@ -20,6 +21,54 @@ export interface TriGroup {
   material?: string;
   /** Flat WCS positions in drawing units, 9 numbers per triangle. */
   tris: number[];
+  /** Large models: triangles go straight into a grid welder instead of `tris`. */
+  weld?: Welder;
+}
+
+/** Adds one triangle (drawing units) to a group – to its list, or to its welder for large models. */
+export function addTri(g: TriGroup, ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number) {
+  if (g.weld) g.weld.tri(ax, ay, az, bx, by, bz, cx, cy, cz);
+  else g.tris.push(ax, ay, az, bx, by, bz, cx, cy, cz);
+}
+
+/**
+ * Triangles the drawing will produce, counting every block insertion (an estimate: only 3D faces,
+ * polyface meshes and MESH objects count; that is what makes files huge).
+ */
+export function estimateTriangles(dxf: RawDxf): number {
+  const memo = new Map<string, number>();
+  const list = (ents: RawEntity[], stack: string[]): number => {
+    let n = 0;
+    for (const e of ents) {
+      if (e.faces) n += e.faces.tris;
+      else if (e.type === "POLYLINE") n += (e.children?.length ?? 0);
+      else if (e.type === "MESH") n += e.pairs.length / 4;
+      else if (e.type === "INSERT") {
+        const name = (str(e.pairs, 2) || "").toUpperCase();
+        if (stack.includes(name) || stack.length > 32) continue;
+        let b = memo.get(name);
+        if (b === undefined) {
+          const blk = dxf.blocks.get(name);
+          b = blk ? list(blk.entities, [...stack, name]) : 0;
+          memo.set(name, b);
+        }
+        n += b * Math.max(1, num(e.pairs, 70, 1)) * Math.max(1, num(e.pairs, 71, 1));
+      }
+    }
+    return n;
+  };
+  return list(dxf.entities, []);
+}
+
+/** Rough extent of the drawing (top-level faces and insertion points) – only to guess units of huge files. */
+export function roughExtent(dxf: RawDxf): number {
+  const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+  const add = (x: number, y: number, z: number) => { if (!Number.isFinite(x + y + z)) return; mn[0] = Math.min(mn[0], x); mn[1] = Math.min(mn[1], y); mn[2] = Math.min(mn[2], z); mx[0] = Math.max(mx[0], x); mx[1] = Math.max(mx[1], y); mx[2] = Math.max(mx[2], z); };
+  for (const e of dxf.entities) {
+    if (e.faces) { const d = e.faces.data; for (let i = 0; i < e.faces.count * 12; i += 3) add(d[i], d[i + 1], d[i + 2]); }
+    else if (e.type === "INSERT") add(num(e.pairs, 10, 0), num(e.pairs, 20, 0), num(e.pairs, 30, 0));
+  }
+  return Number.isFinite(mn[0]) ? Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) : 0;
 }
 
 export interface BuildIssue {
@@ -50,7 +99,7 @@ interface Ctx {
 const ARC_SEGMENTS = 16;
 const CIRCLE_SEGMENTS = 24;
 
-export function buildGeometry(dxf: RawDxf): BuildResult {
+export function buildGeometry(dxf: RawDxf, opts: { weldCell?: number } = {}): BuildResult {
   const res: BuildResult = {
     groups: new Map(),
     entityCounts: {},
@@ -99,7 +148,7 @@ export function buildGeometry(dxf: RawDxf): BuildResult {
     const key = `${layer}\u0000${color}\u0000${material ?? ""}`;
     let g = res.groups.get(key);
     if (!g) {
-      g = { layer, color, material, tris: [] };
+      g = { layer, color, material, tris: [], ...(opts.weldCell ? { weld: new Welder(opts.weldCell) } : {}) };
       res.groups.set(key, g);
     }
     return g;
@@ -107,8 +156,8 @@ export function buildGeometry(dxf: RawDxf): BuildResult {
 
   const emit = (g: TriGroup, M: Mat4, flip: boolean, a: V3, b: V3, c: V3) => {
     const A = apply(M, a), B = apply(M, b), C = apply(M, c);
-    if (flip) g.tris.push(A[0], A[1], A[2], C[0], C[1], C[2], B[0], B[1], B[2]);
-    else g.tris.push(A[0], A[1], A[2], B[0], B[1], B[2], C[0], C[1], C[2]);
+    if (flip) addTri(g, A[0], A[1], A[2], C[0], C[1], C[2], B[0], B[1], B[2]);
+    else addTri(g, A[0], A[1], A[2], B[0], B[1], B[2], C[0], C[1], C[2]);
   };
   const quad = (g: TriGroup, M: Mat4, flip: boolean, a: V3, b: V3, c: V3, d: V3) => {
     emit(g, M, flip, a, b, c);
@@ -117,7 +166,8 @@ export function buildGeometry(dxf: RawDxf): BuildResult {
 
   const visit = (e: RawEntity, M: Mat4, ctx: Ctx) => {
     const P = e.pairs;
-    res.entityCounts[e.type] = (res.entityCounts[e.type] ?? 0) + 1;
+    if (e.faces) res.entityCounts["3DFACE"] = (res.entityCounts["3DFACE"] ?? 0) + e.faces.count;
+    else res.entityCounts[e.type] = (res.entityCounts[e.type] ?? 0) + 1;
     if (num(P, 67, 0) === 1) return; // paper space
     if (num(P, 60, 0) === 1) return; // invisible
 
@@ -149,6 +199,17 @@ export function buildGeometry(dxf: RawDxf): BuildResult {
     }
 
     switch (e.type) {
+      case "@FACES": {
+        const g = groupFor(layer, color);
+        const d = e.faces!.data, n = e.faces!.count;
+        for (let f = 0; f < n; f++) {
+          const o = f * 12;
+          const a: V3 = [d[o], d[o + 1], d[o + 2]], b: V3 = [d[o + 3], d[o + 4], d[o + 5]], c: V3 = [d[o + 6], d[o + 7], d[o + 8]], q: V3 = [d[o + 9], d[o + 10], d[o + 11]];
+          if (same(c, q)) emit(g, M, flip, a, b, c);
+          else quad(g, M, flip, a, b, c, q);
+        }
+        return;
+      }
       case "3DFACE": {
         const p = pts(P, 4);
         const g = groupFor(layer, color);

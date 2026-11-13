@@ -10,6 +10,9 @@ export interface RawEntity {
   pairs: Pair[];
   /** Child records (VERTEX for POLYLINE, ATTRIB for INSERT). */
   children?: RawEntity[];
+  /** "@FACES": many 3DFACEs with identical attributes (layer, colour, material …), coordinates only. */
+  faces?: FaceBatch;
+  sig?: string;
 }
 
 export interface RawBlock {
@@ -60,25 +63,54 @@ export class DxfFormatError extends Error {
   }
 }
 
-/** Fast line cursor that avoids splitting a 100 MB string into an array. */
+/** Random-access byte source (a file read piece by piece; never held as one string). */
+export interface ByteSource { size: number; read(offset: number, length: number): Uint8Array }
+export const bytesSource = (b: Uint8Array): ByteSource => ({ size: b.length, read: (o, l) => b.subarray(o, Math.min(b.length, o + l)) });
+
+const CHUNK = 16 * 1024 * 1024;
+const utf8 = new TextDecoder("utf-8");
+
+/** Line cursor over a byte source: reads 16 MB pieces, decodes one short line at a time. */
 class PairCursor {
+  private buf = new Uint8Array(0);
   private pos = 0;
-  private readonly len: number;
+  private fileOff = 0; // file offset of buf[0]
   peeked: Pair | null = null;
   line = 0;
-  constructor(private readonly src: string) {
-    this.len = src.length;
-    if (src.charCodeAt(0) === 0xfeff) this.pos = 1;
+  constructor(private readonly src: ByteSource, private readonly onRead?: (fraction: number) => void) {
+    this.fill();
+    if (this.buf[0] === 0xef && this.buf[1] === 0xbb && this.buf[2] === 0xbf) this.pos = 3;
+  }
+  /** keep the unread rest, append the next piece of the file */
+  private fill(): boolean {
+    const readTo = this.fileOff + this.buf.length;
+    if (readTo >= this.src.size) return false;
+    const rest = this.buf.subarray(this.pos);
+    const next = this.src.read(readTo, CHUNK);
+    const b = new Uint8Array(rest.length + next.length);
+    b.set(rest); b.set(next, rest.length);
+    this.fileOff = readTo - rest.length;
+    this.buf = b; this.pos = 0;
+    this.onRead?.(Math.min(1, (this.fileOff + b.length) / Math.max(1, this.src.size)));
+    return next.length > 0;
   }
   private readLine(): string | null {
-    if (this.pos >= this.len) return null;
-    let end = this.src.indexOf("\n", this.pos);
-    if (end === -1) end = this.len;
-    let s = this.src.slice(this.pos, end);
+    let end = this.buf.indexOf(10, this.pos);
+    while (end === -1) {
+      if (!this.fill()) { end = this.buf.length; break; }
+      end = this.buf.indexOf(10, this.pos);
+    }
+    if (this.pos >= this.buf.length) return null;
+    let e = end;
+    if (e > this.pos && this.buf[e - 1] === 13) e--;
+    const bytes = this.buf.subarray(this.pos, e);
     this.pos = end + 1;
     this.line++;
-    if (s.endsWith("\r")) s = s.slice(0, -1);
-    return s;
+    let ascii = true;
+    for (let i = 0; i < bytes.length; i++) if (bytes[i] > 127) { ascii = false; break; }
+    if (!ascii) return utf8.decode(bytes);
+    if (bytes.length < 4096) return String.fromCharCode.apply(null, bytes as unknown as number[]);
+    return utf8.decode(bytes);
   }
   next(): Pair | null {
     if (this.peeked) {
@@ -100,6 +132,34 @@ class PairCursor {
     if (!this.peeked) this.peeked = this.next();
     return this.peeked;
   }
+}
+
+/** Consecutive 3DFACEs with the same layer/colour/material, stored compactly: 12 coordinates per face. */
+export interface FaceBatch { data: Float64Array; count: number; tris: number }
+const FACE_COORD = new Set([10, 11, 12, 13, 20, 21, 22, 23, 30, 31, 32, 33]);
+
+function addFace(list: RawEntity[], ent: RawEntity) {
+  const attrs: Pair[] = [];
+  const c = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  let got = 0;
+  for (const [code, v] of ent.pairs) {
+    if (FACE_COORD.has(code)) {
+      // the first value of a code counts (like num()); unparsable values stay 0
+      const i = (code % 10) * 3 + Math.floor(code / 10) - 1;
+      if (!(got & (1 << i))) { got |= 1 << i; const n = parseFloat(v); if (Number.isFinite(n)) c[i] = n; }
+    } else if (code !== 70 && code !== 5 && code !== 330 && code !== 100) attrs.push([code, v]);
+  }
+  const sig = attrs.map(([k, v]) => `${k}=${v}`).join("|");
+  const last = list[list.length - 1];
+  let fb = last && last.type === "@FACES" && last.sig === sig ? last.faces! : undefined;
+  if (!fb) {
+    fb = { data: new Float64Array(12 * 16), count: 0, tris: 0 };
+    list.push({ type: "@FACES", pairs: attrs, faces: fb, sig });
+  }
+  if ((fb.count + 1) * 12 > fb.data.length) { const d = new Float64Array(fb.data.length * 2); d.set(fb.data); fb.data = d; }
+  fb.data.set(c, fb.count * 12);
+  fb.count++;
+  fb.tris += Math.abs(c[6] - c[9]) < 1e-9 && Math.abs(c[7] - c[10]) < 1e-9 && Math.abs(c[8] - c[11]) < 1e-9 ? 1 : 2;
 }
 
 /** Collect pairs until the next code-0 record. */
@@ -125,6 +185,7 @@ function readEntityList(cur: PairCursor, terminators: Set<string>): { list: RawE
       return { list, end: type };
     }
     const ent = readRecord(cur, type);
+    if (type === "3DFACE") { addFace(list, ent); continue; }
     if (type === "POLYLINE") {
       ent.children = readChildren(cur, "VERTEX");
     } else if (type === "INSERT" && num(ent.pairs, 66, 0) === 1) {
@@ -175,13 +236,15 @@ export function isBinaryDxf(head: string): boolean {
   return head.startsWith("AutoCAD Binary DXF");
 }
 
-export function readDxf(text: string): RawDxf {
-  if (isBinaryDxf(text.slice(0, 22))) {
+export function readDxf(input: string | Uint8Array | ByteSource, onRead?: (fraction: number) => void): RawDxf {
+  const src: ByteSource = typeof input === "string" ? bytesSource(new TextEncoder().encode(input)) : input instanceof Uint8Array ? bytesSource(input) : input;
+  const head = src.read(0, 22);
+  if (isBinaryDxf(String.fromCharCode.apply(null, head as unknown as number[]))) {
     throw new DxfFormatError(
       "Diese DXF-Datei ist im Binärformat gespeichert. Bitte in AutoCAD mit DXFOUT als ASCII-DXF speichern (Standardeinstellung)."
     );
   }
-  const cur = new PairCursor(text);
+  const cur = new PairCursor(src, onRead);
   const out: RawDxf = { header: new Map(), layers: new Map(), blocks: new Map(), entities: [], materials: new Map() };
   let sawSection = false;
 
