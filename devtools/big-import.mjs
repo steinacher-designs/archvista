@@ -2358,7 +2358,7 @@ function importGltf(bytes, opts = {}, resources = []) {
   };
   for (const r of roots) count2(r, 0);
   const large = worldTris > LARGE_MODEL_TRIANGLES;
-  const keep = large ? IMPORT_BUDGET / worldTris : 1;
+  let keep = large ? IMPORT_BUDGET / worldTris : 1;
   const cache = /* @__PURE__ */ new Map();
   const readPrim = (p, textured) => {
     const P = accessor(p.attributes.POSITION);
@@ -2422,22 +2422,34 @@ function importGltf(bytes, opts = {}, resources = []) {
     for (const c of node.children ?? []) visit(c, world, depth === 0 && !name ? "" : lay, depth + 1);
   };
   let placed = 0;
+  let counting = false;
+  const need = /* @__PURE__ */ new Map();
   const addMesh = (mi, w, layer) => {
     const mesh = json.meshes[mi];
     const { n: nm, flip } = normalMat(w);
     (mesh?.primitives ?? []).forEach((p, pi) => {
       const mode = p.mode ?? 4;
       if (mode < 4 || p.attributes?.POSITION === void 0) {
-        skipped++;
+        if (!counting) skipped++;
+        return;
+      }
+      const info = material(p.material);
+      const { P, N, T, I, vc } = prim(mi, pi, p, info.textured);
+      const key = `${layer}\0${info.name ?? ""}\0${info.color}`;
+      if (counting) {
+        const c = need.get(key) ?? { v: 0, i: 0 };
+        c.v += N ? vc : I.length;
+        c.i += I.length;
+        need.set(key, c);
         return;
       }
       prims++;
       if (++placed % 500 === 0) progress(0.1 + 0.45 * Math.min(1, placed / Math.max(1, json.nodes.length)), "Objekte werden gelesen");
-      const info = material(p.material);
-      const { P, N, T, I, vc } = prim(mi, pi, p, info.textured);
-      const key = `${layer}\0${info.name ?? ""}\0${info.color}`;
       let g = groups.get(key);
-      if (!g) groups.set(key, g = { layer, material: info.name, color: info.color, textured: info.textured, pos: new GrowF32(), nrm: new GrowF32(), uv: new GrowF32(), idx: new GrowU32() });
+      if (!g) {
+        const c = need.get(key);
+        groups.set(key, g = { layer, material: info.name, color: info.color, textured: info.textured, pos: new GrowF32(c ? c.v * 3 : 1024), nrm: new GrowF32(c ? c.v * 3 : 1024), uv: new GrowF32(c ? c.v * 2 : 1024), idx: new GrowU32(c ? c.i : 1024) });
+      }
       if (info.textured && !g.textured) g.textured = true;
       const put = (vi, fn) => {
         const x = P[vi * 3], y = P[vi * 3 + 1], z = P[vi * 3 + 2];
@@ -2511,6 +2523,19 @@ function importGltf(bytes, opts = {}, resources = []) {
       }
     });
   };
+  if (large) {
+    counting = true;
+    for (const r of roots) visit(r, ident(), "", 0);
+    const total = [...need.values()].reduce((n, c) => n + c.i / 3, 0);
+    if (total > IMPORT_BUDGET * 1.5) {
+      keep *= IMPORT_BUDGET / total;
+      cache.clear();
+      need.clear();
+      for (const r of roots) visit(r, ident(), "", 0);
+    }
+    counting = false;
+    progress(0.35, "Objekte werden gelesen");
+  }
   for (const r of roots) visit(r, ident(), "", 0);
   progress(0.6, "Modell wird optimiert");
   const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];

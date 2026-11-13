@@ -209,7 +209,7 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
   for (const r of roots) count(r, 0);
   // very large scenes: every part is thinned once (fine details only) and the result reused for each placement
   const large = worldTris > LARGE_MODEL_TRIANGLES;
-  const keep = large ? IMPORT_BUDGET / worldTris : 1;
+  let keep = large ? IMPORT_BUDGET / worldTris : 1;
   type Prim = { P: ArrayLike<number>; N: ArrayLike<number> | null; T: ArrayLike<number> | null; I: ArrayLike<number>; vc: number };
   const cache = new Map<string, Prim>();
   const readPrim = (p: J, textured: boolean): Prim => {
@@ -263,19 +263,31 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
     for (const c of node.children ?? []) visit(c, world, depth === 0 && !name ? "" : lay, depth + 1);
   };
   let placed = 0;
+  // large scenes, first pass: only count how much room each group needs (no spare capacity later)
+  let counting = false;
+  const need = new Map<string, { v: number; i: number }>();
   const addMesh = (mi: number, w: M4, layer: string) => {
     const mesh = json.meshes[mi];
     const { n: nm, flip } = normalMat(w);
     (mesh?.primitives ?? []).forEach((p: J, pi: number) => {
       const mode = p.mode ?? 4;
-      if (mode < 4 || p.attributes?.POSITION === undefined) { skipped++; return; }
-      prims++;
-      if (++placed % 500 === 0) progress(0.1 + 0.45 * Math.min(1, placed / Math.max(1, json.nodes.length)), "Objekte werden gelesen");
+      if (mode < 4 || p.attributes?.POSITION === undefined) { if (!counting) skipped++; return; }
       const info = material(p.material);
       const { P, N, T, I, vc } = prim(mi, pi, p, info.textured);
       const key = `${layer}\u0000${info.name ?? ""}\u0000${info.color}`;
+      if (counting) {
+        const c = need.get(key) ?? { v: 0, i: 0 };
+        c.v += N ? vc : I.length; c.i += I.length;
+        need.set(key, c);
+        return;
+      }
+      prims++;
+      if (++placed % 500 === 0) progress(0.1 + 0.45 * Math.min(1, placed / Math.max(1, json.nodes.length)), "Objekte werden gelesen");
       let g = groups.get(key);
-      if (!g) groups.set(key, (g = { layer, material: info.name, color: info.color, textured: info.textured, pos: new GrowF32(), nrm: new GrowF32(), uv: new GrowF32(), idx: new GrowU32() }));
+      if (!g) {
+        const c = need.get(key);
+        groups.set(key, (g = { layer, material: info.name, color: info.color, textured: info.textured, pos: new GrowF32(c ? c.v * 3 : 1024), nrm: new GrowF32(c ? c.v * 3 : 1024), uv: new GrowF32(c ? c.v * 2 : 1024), idx: new GrowU32(c ? c.i : 1024) }));
+      }
       if (info.textured && !g.textured) g.textured = true;
       // glTF is Y-up in metres – the same convention as ARCHVISTA's model data (and the SketchUp import)
       const put = (vi: number, fn?: [number, number, number]) => {
@@ -321,6 +333,19 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
       }
     });
   };
+  if (large) {
+    counting = true;
+    for (const r of roots) visit(r, ident(), "", 0);
+    // parts that could not be thinned enough add up: sharpen once before filling
+    const total = [...need.values()].reduce((n, c) => n + c.i / 3, 0);
+    if (total > IMPORT_BUDGET * 1.5) {
+      keep *= IMPORT_BUDGET / total;
+      cache.clear(); need.clear();
+      for (const r of roots) visit(r, ident(), "", 0);
+    }
+    counting = false;
+    progress(0.35, "Objekte werden gelesen");
+  }
   for (const r of roots) visit(r, ident(), "", 0);
   progress(0.6, "Modell wird optimiert");
 
