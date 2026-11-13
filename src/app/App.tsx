@@ -20,7 +20,7 @@ export function App() {
     return () => window.removeEventListener("keydown", k);
   }, []);
   // a DXF opened via Explorer ("Öffnen mit ARCHVISTA")
-  useEffect(() => { platform.startupFile().then((f) => { if (f) void useStore.getState().openBytes(f.bytes, f.name); }); }, []);
+  useEffect(() => { platform.startupFile().then((f) => { if (f) void useStore.getState().openSource(f.source, f.name); }); }, []);
   // never let a stray file drop navigate the window away
   useEffect(() => {
     const prevent = (e: DragEvent) => e.preventDefault();

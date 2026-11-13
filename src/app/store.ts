@@ -26,7 +26,8 @@ interface State {
   autoMode: boolean;
   progress: { fraction: number; label: string };
   error: { message: string; detail?: string } | null;
-  dxf: Uint8Array | null;
+  /** The model file as read from disk (kept as a Blob: never copied into memory as a whole). */
+  source: Blob | null;
   fileName: string;
   model: ModelMeta | null;
   scene: PreparedScene | null;
@@ -41,7 +42,7 @@ interface State {
   setTab(t: Tab): void;
   setAutoMode(b: boolean): void;
   openFile(file: File): Promise<void>;
-  openBytes(bytes: Uint8Array, fileName: string, existing?: Project, images?: { name: string; data: Uint8Array }[]): Promise<void>;
+  openSource(source: Blob, fileName: string, existing?: Project, images?: { name: string; data: Uint8Array }[]): Promise<void>;
   reprocess(unitsToMeters: number): Promise<void>;
   /** Change the project. Discrete edits create an undo step; `coalesce` merges rapid edits (typing). */
   update(fn: (p: Project) => void, opts?: { coalesce?: string }): void;
@@ -83,7 +84,7 @@ export const useStore = create<State>((set, get) => ({
   autoMode: localStorage.getItem("av-auto") !== "0",
   progress: { fraction: 0, label: "" },
   error: null,
-  dxf: null,
+  source: null,
   fileName: "",
   model: null,
   scene: null,
@@ -109,7 +110,7 @@ export const useStore = create<State>((set, get) => ({
         const dxfs = entries.filter((e) => /\.(dxf|3ds|gltf|glb)$/i.test(e.name)).sort((a, b) => b.data.length - a.data.length);
         if (!dxfs.length) { set({ screen: "failed", error: { message: de ? "Im ZIP wurde keine .dxf-, .3ds- oder .gltf/.glb-Datei gefunden." : "No .dxf, .3ds or .gltf/.glb file found in the ZIP." } }); return; }
         const images = entries.filter((e) => !/\.(dxf|3ds|gltf|glb)$/i.test(e.name)).map((e) => ({ name: baseName(e.name), data: e.data }));
-        await get().openBytes(dxfs[0].data, baseName(dxfs[0].name), undefined, images);
+        await get().openSource(new Blob([dxfs[0].data as BlobPart]), baseName(dxfs[0].name), undefined, images);
       } catch (err) {
         set({ screen: "failed", error: { message: err instanceof ZipError ? err.message : (de ? "Das ZIP konnte nicht gelesen werden." : "Could not read the ZIP.") } });
       }
@@ -119,17 +120,24 @@ export const useStore = create<State>((set, get) => ({
       set({ screen: "failed", error: { message: de ? "Bitte eine .dxf-, .skp-, .3ds- oder .glb-Datei (oder ein ZIP mit Modell und Texturbildern) verwenden. DWG-Dateien bitte in AutoCAD mit _DXFOUT als DXF speichern." : "Please use a .dxf, .skp, .3ds or .glb file (or a ZIP with the model and texture images). Save DWG files as DXF in AutoCAD with _DXFOUT." } });
       return;
     }
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    await get().openBytes(bytes, file.name);
+    await get().openSource(file, file.name);
   },
 
-  async openBytes(bytes, fileName, existing, images) {
-    set({ screen: "processing", error: null, progress: { fraction: 0.01, label: "" }, dxf: bytes, fileName, startedAt: performance.now(), timings: {} });
-    const hash = existing?.fileHash ?? (await sha256Hex(bytes));
+  async openSource(source, fileName, existing, images) {
+    const de = get().lang === "de";
     const format = /\.skp$/i.test(fileName) ? "skp" as const : /\.3ds$/i.test(fileName) ? "3ds" as const : /\.(glb|gltf)$/i.test(fileName) ? "gltf" as const : "dxf" as const;
+    // the SketchUp reader needs several times the file size in memory: very large .skp files would crash the app
+    if (format === "skp" && source.size > SKP_MAX_BYTES) {
+      set({ screen: "failed", error: { message: de
+        ? `Diese SketchUp-Datei ist mit ${Math.round(source.size / 1e6)} MB zu groß zum direkten Einlesen (bis ca. ${SKP_MAX_BYTES / 1e6} MB). Bitte das Modell als GLB, 3DS oder DXF exportieren (z. B. in pCon oder SketchUp: Datei → Exportieren → 3D-Modell) – diese Formate liest ARCHVISTA auch in Gigabyte-Größe.`
+        : `This SketchUp file is too large to read directly (${Math.round(source.size / 1e6)} MB; up to about ${SKP_MAX_BYTES / 1e6} MB). Please export the model as GLB, 3DS or DXF (e.g. in pCon or SketchUp: File → Export → 3D Model) – ARCHVISTA reads those formats even at gigabyte size.` } });
+      return;
+    }
+    set({ screen: "processing", error: null, progress: { fraction: 0.01, label: "" }, source, fileName, startedAt: performance.now(), timings: {} });
+    const hash = existing?.fileHash ?? (await hashSource(source));
     // a .gltf reads its .bin and pictures from the same ZIP; those pictures then come back as the model's textures
     const files = format === "gltf" ? (images ?? []) : undefined;
-    const res = await runWorker({ type: "process", dxf: bytes.slice().buffer, unitsToMeters: existing?.unitsToMeters, format, ...(files?.length ? { files } : {}) }, (f, label) => set({ progress: { fraction: f, label } }));
+    const res = await runWorker({ type: "process", source, unitsToMeters: existing?.unitsToMeters, format, ...(files?.length ? { files } : {}) }, (f, label) => set({ progress: { fraction: f, label } }));
     if (res.type === "error") { set({ screen: "failed", error: { message: res.message, detail: res.detail } }); return; }
     if (res.type !== "done") return;
     if (!res.model.ok) { set({ screen: "failed", model: res.model, error: { message: res.model.warnings[0]?.message ?? get().t.noGeometry, detail: res.model.warnings[0]?.detail } }); return; }
@@ -147,15 +155,15 @@ export const useStore = create<State>((set, get) => ({
     let project = existing ?? automatic({ ...newProject(fileName, hash), ...(customs?.length ? { customMaterials: customs } : {}) }, res.scene, res.model);
     project = { ...project, language: project.language ?? get().lang, ...(existing && embedded ? { customMaterials: customs } : {}) };
     set({ model: res.model, scene: res.scene, project, past: [], future: [], screen: "work", step: "customize", timings: res.timings });
-    void platform.saveProject(project, existing ? undefined : bytes);
+    void platform.saveProject(project, existing ? undefined : source);
   },
 
   async reprocess(unitsToMeters) {
-    const { dxf, fileName, project } = get();
-    if (!dxf || !project) return;
+    const { source, fileName, project } = get();
+    if (!source || !project) return;
     // zones / hotspots were placed in the old scale; they are reset with the new geometry
     const p = { ...project, unitsToMeters, zones: [], hotspots: [], viewpoints: [] };
-    await get().openBytes(dxf, fileName, p);
+    await get().openSource(source, fileName, p);
     const s = get().scene;
     if (s) get().update((pp) => { pp.hotspots = s.hotspotSuggestions; pp.viewpoints = s.viewpoints; });
   },
@@ -192,7 +200,7 @@ export const useStore = create<State>((set, get) => ({
     const a = automatic(project, scene, model);
     get().update((p) => { Object.assign(p, { ...a, title: p.title, description: p.description, author: p.author, images: p.images, publish: p.publish, language: p.language }); });
   },
-  goHome() { set({ screen: "home", scene: null, model: null, project: null, dxf: null, past: [], future: [] }); },
+  goHome() { set({ screen: "home", scene: null, model: null, project: null, source: null, past: [], future: [] }); },
   addTiming(k, ms) { set((s) => ({ timings: { ...s.timings, [k]: ms } })); },
 }));
 
@@ -247,6 +255,19 @@ function noteMissingTextures(model: ModelMeta, customs: MaterialPreset[] | undef
   } as ModelMeta["warnings"][number]);
 }
 
+/** SketchUp files above this size are not read directly (the SketchUp reader would run out of memory). */
+const SKP_MAX_BYTES = 150_000_000;
+
+/** File fingerprint: the full SHA-256 for normal files, for very large ones size + three 8 MB samples. */
+async function hashSource(b: Blob): Promise<string> {
+  if (b.size <= 64 * 1024 * 1024) return sha256Hex(new Uint8Array(await b.arrayBuffer()));
+  const S = 8 * 1024 * 1024, mid = Math.floor(b.size / 2);
+  const parts = [new TextEncoder().encode(`size:${b.size};`), ...await Promise.all([b.slice(0, S), b.slice(mid, mid + S), b.slice(b.size - S)].map(async (x) => new Uint8Array(await x.arrayBuffer())))];
+  const all = new Uint8Array(parts.reduce((n, x) => n + x.length, 0));
+  let o = 0; for (const x of parts) { all.set(x, o); o += x.length; }
+  return sha256Hex(all);
+}
+
 function runWorker(msg: WorkerIn, onProgress: (f: number, label: string) => void): Promise<WorkerOut> {
   return new Promise((resolve) => {
     const w = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
@@ -255,7 +276,7 @@ function runWorker(msg: WorkerIn, onProgress: (f: number, label: string) => void
       else { resolve(e.data); w.terminate(); }
     };
     w.onerror = (e) => { resolve({ type: "error", message: e.message || "Unbekannter Fehler beim Lesen der Datei." }); w.terminate(); };
-    w.postMessage(msg, [msg.dxf]);
+    w.postMessage(msg);
   });
 }
 

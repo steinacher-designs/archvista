@@ -106,7 +106,7 @@ export function importTds(bytes: Uint8Array, opts: ImportOptions = {}): Imported
         meshes.push(tm);
       }
     }
-    if (total > LARGE_MODEL_TRIANGLES) {
+    if (total > (opts.large?.threshold ?? LARGE_MODEL_TRIANGLES)) {
       for (const tm of meshes) {
         const vc = children(tm).find((k) => k.id === C.VERTICES);
         if (!vc) continue;

@@ -208,8 +208,9 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
   };
   for (const r of roots) count(r, 0);
   // very large scenes: every part is thinned once (fine details only) and the result reused for each placement
-  const large = worldTris > LARGE_MODEL_TRIANGLES;
-  let keep = large ? IMPORT_BUDGET / worldTris : 1;
+  const BUDGET = opts.large?.budget ?? IMPORT_BUDGET;
+  const large = worldTris > (opts.large?.threshold ?? LARGE_MODEL_TRIANGLES);
+  let keep = large ? BUDGET / worldTris : 1;
   type Prim = { P: ArrayLike<number>; N: ArrayLike<number> | null; T: ArrayLike<number> | null; I: ArrayLike<number>; vc: number };
   const cache = new Map<string, Prim>();
   const readPrim = (p: J, textured: boolean): Prim => {
@@ -340,8 +341,8 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
     for (const r of roots) visit(r, ident(), "", 0);
     // parts that could not be thinned enough add up: sharpen once before filling
     const total = [...need.values()].reduce((n, c) => n + c.i / 3, 0);
-    if (total > IMPORT_BUDGET * 1.5) {
-      keep *= IMPORT_BUDGET / total;
+    if (total > BUDGET * 1.5) {
+      keep *= BUDGET / total;
       cache.clear(); need.clear();
       for (const r of roots) visit(r, ident(), "", 0);
     }
@@ -369,7 +370,7 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
     g.pos = g.nrm = g.uv = new GrowF32(1); g.idx = new GrowU32(1);
     return r;
   });
-  if (large) list = simplifyToBudget(list, IMPORT_BUDGET).parts;
+  if (large) list = simplifyToBudget(list, BUDGET).parts;
   if (large) warnings.push({ code: "large-model", message: "Sehr großes Modell: Feine Details (z. B. Möbel) wurden beim Einlesen vereinfacht, damit es flüssig bleibt. Wände, Böden und Dächer bleiben exakt." });
   for (const { g, positions, normals, uvs, indices } of list) {
     if (!indices.length) continue;

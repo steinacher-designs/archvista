@@ -116,6 +116,8 @@ export interface ImportOptions {
   /** Override drawing units (metres per drawing unit). */
   unitsToMeters?: number;
   onProgress?: (fraction: number, label: string) => void;
+  /** Large-model mode above this many triangles, and the budget it reads down to (defaults; tests use small values). */
+  large?: { threshold: number; budget: number };
 }
 
 export function importDxf(input: string | Uint8Array | ByteSource, opts: ImportOptions = {}): ImportedModel {
@@ -125,7 +127,7 @@ export function importDxf(input: string | Uint8Array | ByteSource, opts: ImportO
   progress(0.3, "Geometrie wird rekonstruiert");
   // very large drawings: points are welded on a 1 cm grid while the geometry is built (keeps memory in bounds)
   let weldCell: number | undefined;
-  if (estimateTriangles(raw) > LARGE_MODEL_TRIANGLES) {
+  if (estimateTriangles(raw) > (opts.large?.threshold ?? LARGE_MODEL_TRIANGLES)) {
     const code = num(raw.header.get("$INSUNITS") ?? [], 70, 0);
     const toM = opts.unitsToMeters ?? UNITS[code]?.[1] ?? guessUnits(roughExtent(raw))[1];
     weldCell = 0.01 / toM;
@@ -214,7 +216,8 @@ export function finalize(
       return { g, positions, normals: new Float32Array(positions.length), uvs: new Float32Array((positions.length / 3) * 2), indices };
     });
     const otherTris = groups.reduce((n, g) => n + (g.weld ? 0 : g.tris.length / 9), 0);
-    const reduced = simplifyToBudget(parts, Math.max(IMPORT_BUDGET - otherTris, IMPORT_BUDGET / 4)).parts;
+    const budget = opts.large?.budget ?? IMPORT_BUDGET;
+    const reduced = simplifyToBudget(parts, Math.max(budget - otherTris, budget / 4)).parts;
     for (const p of reduced) {
       if (!p.indices.length) continue;
       // consistent winding (closed shells outward), so floors face up – needed to find the storeys

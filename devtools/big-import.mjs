@@ -2202,7 +2202,7 @@ function importDxf(input, opts = {}) {
   const raw = readDxf(input, (f2) => progress(0.05 + 0.25 * f2, "Datei wird gelesen"));
   progress(0.3, "Geometrie wird rekonstruiert");
   let weldCell;
-  if (estimateTriangles(raw) > LARGE_MODEL_TRIANGLES) {
+  if (estimateTriangles(raw) > (opts.large?.threshold ?? LARGE_MODEL_TRIANGLES)) {
     const code = num(raw.header.get("$INSUNITS") ?? [], 70, 0);
     const toM = opts.unitsToMeters ?? UNITS[code]?.[1] ?? guessUnits(roughExtent(raw))[1];
     weldCell = 0.01 / toM;
@@ -2276,7 +2276,8 @@ function finalize(b, insunitsPairs, version, opts, progress, rawMaterials = /* @
       return { g, positions, normals: new Float32Array(positions.length), uvs: new Float32Array(positions.length / 3 * 2), indices };
     });
     const otherTris = groups.reduce((n, g) => n + (g.weld ? 0 : g.tris.length / 9), 0);
-    const reduced = simplifyToBudget(parts, Math.max(IMPORT_BUDGET - otherTris, IMPORT_BUDGET / 4)).parts;
+    const budget = opts.large?.budget ?? IMPORT_BUDGET;
+    const reduced = simplifyToBudget(parts, Math.max(budget - otherTris, budget / 4)).parts;
     for (const p of reduced) {
       if (!p.indices.length) continue;
       if (p.indices.length / 3 <= 15e5) {
@@ -2702,7 +2703,7 @@ function importTds(bytes, opts = {}) {
         meshes.push(tm);
       }
     }
-    if (total > LARGE_MODEL_TRIANGLES) {
+    if (total > (opts.large?.threshold ?? LARGE_MODEL_TRIANGLES)) {
       for (const tm of meshes) {
         const vc = children(tm).find((k) => k.id === C.VERTICES);
         if (!vc) continue;
@@ -3243,8 +3244,9 @@ function importGltf(bytes, opts = {}, resources = []) {
     for (const c of node.children ?? []) count2(c, depth + 1);
   };
   for (const r of roots) count2(r, 0);
-  const large = worldTris > LARGE_MODEL_TRIANGLES;
-  let keep = large ? IMPORT_BUDGET / worldTris : 1;
+  const BUDGET = opts.large?.budget ?? IMPORT_BUDGET;
+  const large = worldTris > (opts.large?.threshold ?? LARGE_MODEL_TRIANGLES);
+  let keep = large ? BUDGET / worldTris : 1;
   const cache = /* @__PURE__ */ new Map();
   const readPrim = (p, textured) => {
     const P = accessor(p.attributes.POSITION);
@@ -3414,8 +3416,8 @@ function importGltf(bytes, opts = {}, resources = []) {
     counting = true;
     for (const r of roots) visit(r, ident(), "", 0);
     const total = [...need.values()].reduce((n, c) => n + c.i / 3, 0);
-    if (total > IMPORT_BUDGET * 1.5) {
-      keep *= IMPORT_BUDGET / total;
+    if (total > BUDGET * 1.5) {
+      keep *= BUDGET / total;
       cache.clear();
       need.clear();
       for (const r of roots) visit(r, ident(), "", 0);
@@ -3447,7 +3449,7 @@ function importGltf(bytes, opts = {}, resources = []) {
     g.idx = new GrowU32(1);
     return r;
   });
-  if (large) list = simplifyToBudget(list, IMPORT_BUDGET).parts;
+  if (large) list = simplifyToBudget(list, BUDGET).parts;
   if (large) warnings.push({ code: "large-model", message: "Sehr gro\xDFes Modell: Feine Details (z. B. M\xF6bel) wurden beim Einlesen vereinfacht, damit es fl\xFCssig bleibt. W\xE4nde, B\xF6den und D\xE4cher bleiben exakt." });
   for (const { g, positions, normals, uvs, indices } of list) {
     if (!indices.length) continue;

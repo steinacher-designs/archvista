@@ -19,18 +19,25 @@ export const platform = {
     } catch { return null; }
   },
 
-  async saveProject(p: Project, dxf?: Uint8Array, thumb?: string) {
+  /** Saves the project; `source` (the model file) is written in pieces, so even gigabyte files never sit in memory twice. */
+  async saveProject(p: Project, source?: Blob, thumb?: string) {
     if (isTauri) {
       const { invoke } = await core();
       await invoke("project_save", { id: p.id, json: JSON.stringify(p), thumb: thumb ?? null });
-      if (dxf) await invoke("project_save_source", dxf, { headers: { "x-id": p.id } });
+      if (source) {
+        const pieces = Math.max(1, Math.ceil(source.size / PIECE));
+        for (let i = 0; i < pieces; i++) {
+          const piece = new Uint8Array(await source.slice(i * PIECE, (i + 1) * PIECE).arrayBuffer());
+          await invoke("project_save_source", piece, { headers: { "x-id": p.id, "x-offset": String(i * PIECE) } });
+        }
+      }
       return;
     }
     try {
       localStorage.setItem(`av-project-${p.id}`, JSON.stringify(p));
       if (thumb) localStorage.setItem(`av-thumb-${p.id}`, thumb);
     } catch { /* storage full: autosave is best effort in the browser build */ }
-    if (dxf) await idbPut(`dxf-${p.id}`, dxf);
+    if (source) await idbPut(`dxf-${p.id}`, source);
   },
 
   async listProjects(): Promise<RecentProject[]> {
@@ -47,17 +54,19 @@ export const platform = {
     return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
 
-  async loadProject(id: string): Promise<{ project: Project; dxf: Uint8Array } | null> {
+  async loadProject(id: string): Promise<{ project: Project; source: Blob } | null> {
     if (isTauri) {
       const { invoke } = await core();
       const json = await invoke<string | null>("project_load", { id });
       if (!json) return null;
-      const dxf = new Uint8Array(await invoke<ArrayBuffer>("project_load_source", { id }));
-      return { project: JSON.parse(json), dxf };
+      const size = await invoke<number>("project_source_size", { id });
+      const source = await readPieces(size, (offset, len) => invoke<ArrayBuffer>("project_load_source_chunk", { id, offset, len }));
+      return { project: JSON.parse(json), source };
     }
     const j = localStorage.getItem(`av-project-${id}`);
-    const dxf = await idbGet(`dxf-${id}`);
-    return j && dxf ? { project: JSON.parse(j), dxf } : null;
+    const v = await idbGet(`dxf-${id}`);
+    const source = v instanceof Blob ? v : v ? new Blob([v as BlobPart]) : null;
+    return j && source ? { project: JSON.parse(j), source } : null;
   },
 
   async saveDocument(projectId: string, docId: string, bytes: Uint8Array) {
@@ -67,7 +76,7 @@ export const platform = {
   async loadDocument(projectId: string, docId: string): Promise<Uint8Array | null> {
     try {
       if (isTauri) { const { invoke } = await core(); return new Uint8Array(await invoke<ArrayBuffer>("doc_load", { id: projectId, doc: docId })); }
-      return await idbGet(`doc-${projectId}-${docId}`);
+      return (await idbGet(`doc-${projectId}-${docId}`)) as Uint8Array | null;
     } catch { return null; }
   },
   async deleteDocument(projectId: string, docId: string) {
@@ -150,11 +159,12 @@ export const platform = {
   },
 
   /** A .dxf passed by the operating system (double-click / "open with"). */
-  async startupFile(): Promise<{ name: string; bytes: Uint8Array } | null> {
+  async startupFile(): Promise<{ name: string; source: Blob } | null> {
     if (!isTauri) return null;
     const { invoke } = await core();
-    const f = await invoke<{ name: string; bytes: number[] } | null>("startup_file");
-    return f ? { name: f.name, bytes: new Uint8Array(f.bytes) } : null;
+    const f = await invoke<{ name: string; size: number } | null>("startup_file");
+    if (!f) return null;
+    return { name: f.name, source: await readPieces(f.size, (offset, len) => invoke<ArrayBuffer>("startup_file_chunk", { offset, len })) };
   },
 
   async appendBenchmark(line: Record<string, unknown>) {
@@ -162,6 +172,15 @@ export const platform = {
     else console.info("[benchmark]", line);
   },
 };
+
+/** Size of one piece when big files travel between the app and the disk. */
+const PIECE = 64 * 1024 * 1024;
+/** Reads a stored file piece by piece into a Blob (the pieces stay outside the JavaScript heap). */
+async function readPieces(size: number, read: (offset: number, len: number) => Promise<ArrayBuffer>): Promise<Blob> {
+  const parts: BlobPart[] = [];
+  for (let o = 0; o < size; o += PIECE) parts.push(new Blob([await read(o, Math.min(PIECE, size - o))]));
+  return new Blob(parts);
+}
 
 // ——— browser fallbacks ———
 function idb(): Promise<IDBDatabase> {
@@ -172,11 +191,11 @@ function idb(): Promise<IDBDatabase> {
     r.onerror = () => rej(r.error);
   });
 }
-async function idbPut(key: string, v: Uint8Array) {
+async function idbPut(key: string, v: Uint8Array | Blob) {
   const db = await idb();
   await new Promise<void>((res, rej) => { const t = db.transaction("kv", "readwrite"); t.objectStore("kv").put(v, key); t.oncomplete = () => res(); t.onerror = () => rej(t.error); });
 }
-async function idbGet(key: string): Promise<Uint8Array | null> {
+async function idbGet(key: string): Promise<unknown> {
   const db = await idb();
   return new Promise((res) => { const r = db.transaction("kv").objectStore("kv").get(key); r.onsuccess = () => res(r.result ?? null); r.onerror = () => res(null); });
 }
