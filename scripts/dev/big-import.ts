@@ -16,6 +16,7 @@ const model = /\.dxf$/i.test(f) ? importDxf(src, { onProgress }) : /\.3ds$/i.tes
 const t1 = Date.now();
 console.log("import", (t1 - t0) / 1000, "s · triangles", model.stats.triangles, "· ok", model.ok, "·", mem(), "· warnings", model.warnings.map((w) => w.code).join(","));
 console.log("bbox", JSON.stringify(model.bbox), "units", model.units.name);
+console.log("layers", model.layers.length, "e.g.", model.layers.slice(0, 12).map((l) => `${l.name}(${l.triangleCount})`).join(", "));
 const scene = prepareScene(model);
 console.log("scene", (Date.now() - t1) / 1000, "s · parts", scene.parts.length, "· levels", scene.analysis.levels.length, "·", mem(), "· peak", (Math.max(peak, process.memoryUsage().rss) / 1e6) | 0, "MB");
 clearInterval(tick);

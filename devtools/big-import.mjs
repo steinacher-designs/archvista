@@ -3274,6 +3274,7 @@ var model = /\.dxf$/i.test(f) ? importDxf(src, { onProgress }) : /\.3ds$/i.test(
 var t1 = Date.now();
 console.log("import", (t1 - t0) / 1e3, "s \xB7 triangles", model.stats.triangles, "\xB7 ok", model.ok, "\xB7", mem(), "\xB7 warnings", model.warnings.map((w) => w.code).join(","));
 console.log("bbox", JSON.stringify(model.bbox), "units", model.units.name);
+console.log("layers", model.layers.length, "e.g.", model.layers.slice(0, 12).map((l) => `${l.name}(${l.triangleCount})`).join(", "));
 var scene = prepareScene(model);
 console.log("scene", (Date.now() - t1) / 1e3, "s \xB7 parts", scene.parts.length, "\xB7 levels", scene.analysis.levels.length, "\xB7", mem(), "\xB7 peak", Math.max(peak, process.memoryUsage().rss) / 1e6 | 0, "MB");
 clearInterval(tick);
