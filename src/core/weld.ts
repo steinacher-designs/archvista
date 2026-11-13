@@ -57,16 +57,16 @@ export class Welder {
   private vals: Int32Array;
   private mask: number;
   private used = 0;
-  readonly pos = new GrowF64(3 * 256);
-  readonly idx = new GrowU32(3 * 256);
+  readonly pos = new GrowF64(48);
+  readonly idx = new GrowU32(48);
   /** triangles offered / dropped because they collapsed */
   offered = 0;
   dropped = 0;
   constructor(readonly cell: number) {
     this.inv = 1 / cell;
-    this.mask = 255;
-    this.keys = new Int32Array(256 * 3);
-    this.vals = new Int32Array(256).fill(-1);
+    this.mask = 31;
+    this.keys = new Int32Array(32 * 3);
+    this.vals = new Int32Array(32).fill(-1);
   }
   get vertexCount() { return this.pos.n / 3; }
   get triangleCount() { return this.idx.n / 3; }

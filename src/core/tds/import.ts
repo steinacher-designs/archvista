@@ -2,9 +2,10 @@
 // transparency and texture file name) and hands it to the same pipeline as the DXF import (units, welding,
 // orientation, crease normals). Written from the public 3DS chunk documentation; no third-party code.
 
-import type { BuildResult, TriGroup } from "../dxf/build";
+import { addTri, type BuildResult, type TriGroup } from "../dxf/build";
+import { Welder, LARGE_MODEL_TRIANGLES } from "../weld";
 import type { RawMaterial } from "../dxf/reader";
-import { finalize, type ImportedModel, type ImportOptions } from "../dxf/import";
+import { finalize, guessUnits, type ImportedModel, type ImportOptions } from "../dxf/import";
 
 const C = {
   MAIN: 0x4d4d, EDITOR: 0x3d3d, OBJECT: 0x4000, HIDDEN: 0x4010, TRIMESH: 0x4100, VERTICES: 0x4110, FACES: 0x4120, FACE_MAT: 0x4130,
@@ -83,10 +84,38 @@ export function importTds(bytes: Uint8Array, opts: ImportOptions = {}): Imported
     const color = rm?.diffuse ?? 0xcccccc;
     const key = `${layer}\u0000${mat ?? ""}`;
     let g = groups.get(key);
-    if (!g) groups.set(key, (g = { layer, color, material: rm ? rm.name : undefined, tris: [] }));
+    if (!g) groups.set(key, (g = { layer, color, material: rm ? rm.name : undefined, tris: [], ...(weldCell ? { weld: new Welder(weldCell) } : {}) }));
     return g;
   };
   const objs = editorItems.filter((k) => k.id === C.OBJECT);
+  // very large files: count faces and measure first; then points are welded on a 1 cm grid while reading
+  let weldCell: number | undefined;
+  {
+    let total = 0;
+    const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+    const meshes: Chunk[] = [];
+    for (const o of objs) {
+      const [, after] = cstr(o.start, o.end);
+      for (const tm of children(o, after)) if (tm.id === C.TRIMESH) {
+        const fc = children(tm).find((k) => k.id === C.FACES);
+        if (fc) total += dv.getUint16(fc.start, true);
+        meshes.push(tm);
+      }
+    }
+    if (total > LARGE_MODEL_TRIANGLES) {
+      for (const tm of meshes) {
+        const vc = children(tm).find((k) => k.id === C.VERTICES);
+        if (!vc) continue;
+        const nv = dv.getUint16(vc.start, true);
+        for (let i = 0; i < nv && vc.start + 2 + i * 12 + 12 <= vc.end; i += 7) for (let k = 0; k < 3; k++) {
+          const v = dv.getFloat32(vc.start + 2 + i * 12 + k * 4, true);
+          if (v < mn[k]) mn[k] = v; if (v > mx[k]) mx[k] = v;
+        }
+      }
+      const ext = Number.isFinite(mn[0]) ? Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) : 0;
+      weldCell = 0.01 / (opts.unitsToMeters ?? guessUnits(ext)[1]);
+    }
+  }
   objs.forEach((o, oi) => {
     if (oi % 50 === 0) progress(0.1 + 0.4 * (oi / Math.max(1, objs.length)), "Objekte werden gelesen");
     const [name, after] = cstr(o.start, o.end);
@@ -115,7 +144,7 @@ export function importTds(bytes: Uint8Array, opts: ImportOptions = {}): Imported
         const a = dv.getUint16(at, true), b = dv.getUint16(at + 2, true), c = dv.getUint16(at + 4, true);
         if (a >= nv || b >= nv || c >= nv) continue;
         // 3DS stores vertices in world space, Z up, in the file's units — exactly like DXF drawing coordinates
-        groupFor(layer, faceMat[f]).tris.push(V[a * 3], V[a * 3 + 1], V[a * 3 + 2], V[b * 3], V[b * 3 + 1], V[b * 3 + 2], V[c * 3], V[c * 3 + 1], V[c * 3 + 2]);
+        addTri(groupFor(layer, faceMat[f]), V[a * 3], V[a * 3 + 1], V[a * 3 + 2], V[b * 3], V[b * 3 + 1], V[b * 3 + 2], V[c * 3], V[c * 3 + 1], V[c * 3 + 2]);
         faces++;
       }
     }

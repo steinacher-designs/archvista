@@ -7,8 +7,10 @@ export interface SimplifiablePart { positions: Float32Array; normals: Float32Arr
 
 /** Detail threshold: parts with more triangles per m² than this count as "fine detail". */
 const DENSE = 40;
+/** Parts with fewer triangles are never simplified (a box, a simple chair …). */
+const MIN_TRIS = 300;
 
-function area(p: SimplifiablePart): number {
+export function surfaceArea(p: SimplifiablePart): number {
   const P = p.positions, I = p.indices;
   let s = 0;
   for (let t = 0; t < I.length; t += 3) {
@@ -63,7 +65,7 @@ export function clusterPart<T extends SimplifiablePart>(p: T, cell: number): T {
 /** Finely detailed part (furniture, décor …): many triangles per m² of surface. */
 export function isDetailPart(p: SimplifiablePart): boolean {
   const tris = p.indices.length / 3;
-  return tris > 2000 && tris / Math.max(area(p), 1e-6) > DENSE;
+  return tris > MIN_TRIS && tris / Math.max(surfaceArea(p), 1e-6) > DENSE;
 }
 
 export const triangleCount = (parts: SimplifiablePart[]) => parts.reduce((n, p) => n + p.indices.length / 3, 0);
@@ -75,7 +77,7 @@ export const triangleCount = (parts: SimplifiablePart[]) => parts.reduce((n, p) 
 export function simplifyToBudget<T extends SimplifiablePart>(parts: T[], budget: number): { parts: T[]; before: number; after: number; cell: number } {
   const before = triangleCount(parts);
   if (before <= budget) return { parts, before, after: before, cell: 0 };
-  const info = parts.map((p) => { const tris = p.indices.length / 3; const a = tris > 2000 ? area(p) : 0; return { tris, area: a, dense: tris > 2000 && tris / Math.max(a, 1e-6) > DENSE }; });
+  const info = parts.map((p) => { const tris = p.indices.length / 3; const a = tris > MIN_TRIS ? surfaceArea(p) : 0; return { tris, area: a, dense: tris > MIN_TRIS && tris / Math.max(a, 1e-6) > DENSE }; });
   const fixed = info.reduce((n, x) => n + (x.dense ? 0 : x.tris), 0);
   const denseArea = info.reduce((n, x) => n + (x.dense ? x.area : 0), 0);
   if (!denseArea) return { parts, before, after: before, cell: 0 };
