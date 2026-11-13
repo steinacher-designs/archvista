@@ -2390,7 +2390,7 @@ function importGltf(bytes, opts = {}, resources = []) {
     }
     return { P, N, T, I, vc };
   };
-  const prim = (mi, pi, p, textured) => {
+  const prim = (mi, pi, p, textured, w) => {
     if (!large) return readPrim(p, textured);
     const key = `${mi}/${pi}`;
     let c = cache.get(key);
@@ -2401,11 +2401,12 @@ function importGltf(bytes, opts = {}, resources = []) {
     for (let i = 0; i < nI; i++) indices[i] = r.I[i] < r.vc ? r.I[i] : 0;
     const part = { positions: Float32Array.from(r.P), normals: r.N ? Float32Array.from(r.N) : new Float32Array(r.P.length), uvs: r.T ? Float32Array.from(r.T) : new Float32Array(r.vc * 2), indices };
     if (!r.N) smoothNormals(part.positions, indices, part.normals);
-    const tris = nI / 3, a = surfaceArea(part);
+    const sc = Math.cbrt(Math.abs(w[0] * (w[5] * w[10] - w[9] * w[6]) - w[4] * (w[1] * w[10] - w[9] * w[2]) + w[8] * (w[1] * w[6] - w[5] * w[2]))) * s || 1;
+    const tris = nI / 3, a = surfaceArea(part) * sc * sc;
     let out = part;
     if (tris > 300 && tris / Math.max(a, 1e-6) > 40) {
       const cell = Math.min(0.15, Math.max(5e-3, Math.sqrt(2 * a / Math.max(1, tris * keep))));
-      out = clusterPart(part, cell);
+      out = clusterPart(part, cell / sc);
     }
     c = { P: out.positions, N: out.normals, T: r.T ? out.uvs : null, I: out.indices, vc: out.positions.length / 3 };
     cache.set(key, c);
@@ -2434,7 +2435,7 @@ function importGltf(bytes, opts = {}, resources = []) {
         return;
       }
       const info = material(p.material);
-      const { P, N, T, I, vc } = prim(mi, pi, p, info.textured);
+      const { P, N, T, I, vc } = prim(mi, pi, p, info.textured, w);
       const key = `${layer}\0${info.name ?? ""}\0${info.color}`;
       if (counting) {
         const c = need.get(key) ?? { v: 0, i: 0 };
@@ -2534,8 +2535,7 @@ function importGltf(bytes, opts = {}, resources = []) {
       for (const r of roots) visit(r, ident(), "", 0);
     }
     counting = false;
-    const nv = [...need.values()].reduce((n, c) => n + c.v, 0), nt = [...need.values()].reduce((n, c) => n + c.i / 3, 0);
-    progress(0.4, `Objekte werden gelesen DEBUG ${nt | 0} tris ${nv} verts cache ${cache.size} keep ${keep.toFixed(3)} world ${worldTris}`);
+    progress(0.35, "Objekte werden gelesen");
   }
   for (const r of roots) visit(r, ident(), "", 0);
   progress(0.6, "Modell wird optimiert");

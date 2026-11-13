@@ -229,7 +229,7 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
     }
     return { P, N, T, I, vc };
   };
-  const prim = (mi: number, pi: number, p: J, textured: boolean): Prim => {
+  const prim = (mi: number, pi: number, p: J, textured: boolean, w: M4): Prim => {
     if (!large) return readPrim(p, textured);
     const key = `${mi}/${pi}`;
     let c = cache.get(key);
@@ -240,11 +240,13 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
     for (let i = 0; i < nI; i++) indices[i] = r.I[i] < r.vc ? r.I[i] : 0;
     const part = { positions: Float32Array.from(r.P), normals: r.N ? Float32Array.from(r.N) : new Float32Array(r.P.length), uvs: r.T ? Float32Array.from(r.T) : new Float32Array(r.vc * 2), indices };
     if (!r.N) smoothNormals(part.positions, indices, part.normals);
-    const tris = nI / 3, a = surfaceArea(part);
+    // sizes in metres: parts are often stored in mm and scaled where they are placed (the first placement counts)
+    const sc = Math.cbrt(Math.abs(w[0] * (w[5] * w[10] - w[9] * w[6]) - w[4] * (w[1] * w[10] - w[9] * w[2]) + w[8] * (w[1] * w[6] - w[5] * w[2]))) * s || 1;
+    const tris = nI / 3, a = surfaceArea(part) * sc * sc;
     let out = part;
     if (tris > 300 && tris / Math.max(a, 1e-6) > 40) {
       const cell = Math.min(0.15, Math.max(0.005, Math.sqrt((2 * a) / Math.max(1, tris * keep))));
-      out = clusterPart(part, cell);
+      out = clusterPart(part, cell / sc);
     }
     c = { P: out.positions, N: out.normals, T: r.T ? out.uvs : null, I: out.indices, vc: out.positions.length / 3 };
     cache.set(key, c);
@@ -273,7 +275,7 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
       const mode = p.mode ?? 4;
       if (mode < 4 || p.attributes?.POSITION === undefined) { if (!counting) skipped++; return; }
       const info = material(p.material);
-      const { P, N, T, I, vc } = prim(mi, pi, p, info.textured);
+      const { P, N, T, I, vc } = prim(mi, pi, p, info.textured, w);
       const key = `${layer}\u0000${info.name ?? ""}\u0000${info.color}`;
       if (counting) {
         const c = need.get(key) ?? { v: 0, i: 0 };
@@ -344,8 +346,7 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
       for (const r of roots) visit(r, ident(), "", 0);
     }
     counting = false;
-    const nv = [...need.values()].reduce((n, c) => n + c.v, 0), nt = [...need.values()].reduce((n, c) => n + c.i / 3, 0);
-    progress(0.4, `Objekte werden gelesen DEBUG ${nt | 0} tris ${nv} verts cache ${cache.size} keep ${keep.toFixed(3)} world ${worldTris}`);
+    progress(0.35, "Objekte werden gelesen");
   }
   for (const r of roots) visit(r, ident(), "", 0);
   progress(0.6, "Modell wird optimiert");
