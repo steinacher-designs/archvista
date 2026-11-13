@@ -2528,9 +2528,9 @@ function importGltf(bytes, opts = {}, resources = []) {
   const origin = ok ? [(mn[0] + mx[0]) / 2, mn[1], (mn[2] + mx[2]) / 2] : [0, 0, 0];
   let gi = 0, triangles = 0, vertices = 0;
   let list = [...groups.values()].filter((g) => g.idx.n).map((g) => {
-    const positions = g.pos.take();
+    const positions = g.pos.a.subarray(0, g.pos.n);
     for (let i = 0; i < positions.length; i += 3) for (let k = 0; k < 3; k++) positions[i + k] -= origin[k];
-    const r = { g, positions, normals: g.nrm.take(), uvs: g.uv.take(), indices: g.idx.take() };
+    const r = { g, positions, normals: g.nrm.a.subarray(0, g.nrm.n), uvs: g.uv.a.subarray(0, g.uv.n), indices: g.idx.a.subarray(0, g.idx.n) };
     g.pos = g.nrm = g.uv = new GrowF32(1);
     g.idx = new GrowU32(1);
     return r;

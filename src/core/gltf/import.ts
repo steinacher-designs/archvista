@@ -336,8 +336,9 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
   let gi = 0, triangles = 0, vertices = 0;
   // large scenes: parts placed many times can still add up – thin fine details down to the budget
   let list = [...groups.values()].filter((g) => g.idx.n).map((g) => {
-    const positions = g.pos.take(); for (let i = 0; i < positions.length; i += 3) for (let k = 0; k < 3; k++) positions[i + k] -= origin[k];
-    const r = { g, positions, normals: g.nrm.take(), uvs: g.uv.take(), indices: g.idx.take() };
+    // (no copies: a large scene would briefly need twice the memory)
+    const positions = g.pos.a.subarray(0, g.pos.n); for (let i = 0; i < positions.length; i += 3) for (let k = 0; k < 3; k++) positions[i + k] -= origin[k];
+    const r = { g, positions, normals: g.nrm.a.subarray(0, g.nrm.n), uvs: g.uv.a.subarray(0, g.uv.n), indices: g.idx.a.subarray(0, g.idx.n) };
     g.pos = g.nrm = g.uv = new GrowF32(1); g.idx = new GrowU32(1);
     return r;
   });
