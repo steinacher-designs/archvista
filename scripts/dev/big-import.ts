@@ -1,0 +1,23 @@
+// Dev helper: import a big model from disk the way the app's worker does (piecewise), report time & memory. args: file
+import { openSync, readSync, fstatSync } from "node:fs";
+import { importDxf } from "../../src/core/dxf/import";
+import { importTds } from "../../src/core/tds/import";
+import { importGltf } from "../../src/core/gltf/import";
+import { importSkp } from "../../src/core/skp/import";
+import { prepareScene } from "../../src/core/scene";
+const f = process.argv[2];
+const fd = openSync(f, "r"), size = fstatSync(fd).size;
+const src = { size, read: (o: number, l: number) => { const b = Buffer.alloc(Math.min(l, size - o)); readSync(fd, b, 0, b.length, o); return new Uint8Array(b.buffer, b.byteOffset, b.length); } };
+const mem = () => { const m = process.memoryUsage(); return `heap ${(m.heapUsed / 1e6) | 0} MB, total ${(m.rss / 1e6) | 0} MB`; };
+let peak = 0; const tick = setInterval(() => { peak = Math.max(peak, process.memoryUsage().rss); }, 200);
+const t0 = Date.now(); let lastP = "";
+const onProgress = (fr: number, l: string) => { const s = `${l} ${Math.round(fr * 100)}%`; if (s !== lastP && Math.round(fr * 100) % 10 === 0) { lastP = s; console.log(`  ${((Date.now() - t0) / 1000).toFixed(0)}s ${s} · ${mem()}`); } };
+const whole = () => src.read(0, size);
+const model = /\.dxf$/i.test(f) ? importDxf(src, { onProgress }) : /\.3ds$/i.test(f) ? importTds(whole(), { onProgress }) : /\.skp$/i.test(f) ? importSkp(whole(), { onProgress }).model : importGltf(whole(), { onProgress }).model;
+const t1 = Date.now();
+console.log("import", (t1 - t0) / 1000, "s · triangles", model.stats.triangles, "· ok", model.ok, "·", mem(), "· warnings", model.warnings.map((w) => w.code).join(","));
+console.log("bbox", JSON.stringify(model.bbox), "units", model.units.name);
+console.log("layers", model.layers.length, "e.g.", model.layers.slice(0, 12).map((l) => `${l.name}(${l.triangleCount})`).join(", "));
+const scene = prepareScene(model);
+console.log("scene", (Date.now() - t1) / 1000, "s · parts", scene.parts.length, "· levels", scene.analysis.levels.length, "·", mem(), "· peak", (Math.max(peak, process.memoryUsage().rss) / 1e6) | 0, "MB");
+clearInterval(tick);

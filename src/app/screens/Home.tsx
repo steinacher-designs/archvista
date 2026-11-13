@@ -3,7 +3,7 @@ import { useStore } from "../store";
 import { platform, type RecentProject } from "../platform";
 
 export function Home() {
-  const { t, openFile, openBytes, autoMode, setAutoMode } = useStore();
+  const { t, openFile, openSource, autoMode, setAutoMode } = useStore();
   const [over, setOver] = useState(false);
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [help, setHelp] = useState(false);
@@ -41,7 +41,7 @@ export function Home() {
           {recent.length === 0 ? <p style={{ color: "var(--ink3)" }}>{t.noRecent}</p> : (
             <div className="cards">
               {recent.slice(0, 12).map((r) => (
-                <button key={r.id} className="card" onClick={async () => { const p = await platform.loadProject(r.id); if (p) await openBytes(p.dxf, p.project.fileName, p.project); }}>
+                <button key={r.id} className="card" onClick={async () => { const p = await platform.loadProject(r.id); if (p) await openSource(p.source, p.project.fileName, p.project); }}>
                   <div className="th" style={r.thumb ? { backgroundImage: `url(${r.thumb})` } : undefined} />
                   <div className="meta"><b>{r.title}</b><small>{r.fileName} · {new Date(r.updatedAt).toLocaleDateString()}</small></div>
                 </button>

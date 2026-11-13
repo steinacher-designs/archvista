@@ -1,7 +1,9 @@
 // ARCHVISTA — public import API: DXF text → web-ready indexed meshes in metres (Y-up).
 
-import { readDxf, num, type RawMaterial } from "./reader";
-import { buildGeometry, BuildResult } from "./build";
+import { readDxf, num, type RawMaterial, type ByteSource } from "./reader";
+import { buildGeometry, BuildResult, estimateTriangles, roughExtent } from "./build";
+import { LARGE_MODEL_TRIANGLES, IMPORT_BUDGET, dedupeTriangles } from "../weld";
+import { simplifyToBudget } from "../simplify";
 
 export type UnitSource = "header" | "guess" | "user";
 
@@ -114,14 +116,23 @@ export interface ImportOptions {
   /** Override drawing units (metres per drawing unit). */
   unitsToMeters?: number;
   onProgress?: (fraction: number, label: string) => void;
+  /** Large-model mode above this many triangles, and the budget it reads down to (defaults; tests use small values). */
+  large?: { threshold: number; budget: number };
 }
 
-export function importDxf(text: string, opts: ImportOptions = {}): ImportedModel {
+export function importDxf(input: string | Uint8Array | ByteSource, opts: ImportOptions = {}): ImportedModel {
   const progress = opts.onProgress ?? (() => {});
   progress(0.05, "Datei wird gelesen");
-  const raw = readDxf(text);
+  const raw = readDxf(input, (f) => progress(0.05 + 0.25 * f, "Datei wird gelesen"));
   progress(0.3, "Geometrie wird rekonstruiert");
-  const built = buildGeometry(raw);
+  // very large drawings: points are welded on a 1 cm grid while the geometry is built (keeps memory in bounds)
+  let weldCell: number | undefined;
+  if (estimateTriangles(raw) > (opts.large?.threshold ?? LARGE_MODEL_TRIANGLES)) {
+    const code = num(raw.header.get("$INSUNITS") ?? [], 70, 0);
+    const toM = opts.unitsToMeters ?? UNITS[code]?.[1] ?? guessUnits(roughExtent(raw))[1];
+    weldCell = 0.01 / toM;
+  }
+  const built = buildGeometry(raw, { weldCell });
   progress(0.6, "Modell wird optimiert");
   return finalize(built, raw.header.get("$INSUNITS"), raw.version, opts, progress, raw.materials);
 }
@@ -138,13 +149,15 @@ export function finalize(
 
   // Raw extent in drawing units (Z-up DXF coordinates).
   const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
-  for (const g of b.groups.values())
-    for (let i = 0; i < g.tris.length; i += 3)
+  for (const g of b.groups.values()) {
+    const arr: ArrayLike<number> = g.weld ? g.weld.pos.view() : g.tris;
+    for (let i = 0; i < arr.length; i += 3)
       for (let k = 0; k < 3; k++) {
-        const v = g.tris[i + k];
+        const v = arr[i + k];
         if (v < mn[k]) mn[k] = v;
         if (v > mx[k]) mx[k] = v;
       }
+  }
   const hasGeo = Number.isFinite(mn[0]);
   const rawExtent = hasGeo ? Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) : 0;
 
@@ -187,7 +200,47 @@ export function finalize(
   const bmax: [number, number, number] = [-Infinity, -Infinity, -Infinity];
   let gi = 0;
   const groups = [...b.groups.values()];
+  // large models: welded groups → metres, fine details thinned to the budget, flat normals
+  const welded = groups.filter((g) => g.weld);
+  if (welded.length) {
+    const parts = welded.map((g) => {
+      const w = g.weld!, P = w.pos.view();
+      const positions = new Float32Array(P.length);
+      for (let i = 0; i < P.length; i += 3) { positions[i] = P[i] * s - origin[0]; positions[i + 1] = P[i + 2] * s - origin[1]; positions[i + 2] = -P[i + 1] * s - origin[2]; }
+      removedDegenerate += w.dropped;
+      // front and back copies of the same face (SketchUp exports) → one
+      const dd = dedupeTriangles(w.idx.view());
+      removedDuplicate += dd.removed;
+      const indices = dd.indices;
+      g.weld = undefined; // free the welder
+      return { g, positions, normals: new Float32Array(positions.length), uvs: new Float32Array((positions.length / 3) * 2), indices };
+    });
+    const otherTris = groups.reduce((n, g) => n + (g.weld ? 0 : g.tris.length / 9), 0);
+    const budget = opts.large?.budget ?? IMPORT_BUDGET;
+    const reduced = simplifyToBudget(parts, Math.max(budget - otherTris, budget / 4)).parts;
+    for (const p of reduced) {
+      if (!p.indices.length) continue;
+      // consistent winding (closed shells outward), so floors face up – needed to find the storeys
+      if (p.indices.length / 3 <= 1_500_000) {
+        const r = orientConsistently(p.positions as unknown as number[], p.indices as unknown as number[]);
+        flipped += r.flipped; outward += r.outward;
+      }
+      const flat = flatten(p.positions, p.indices);
+      for (let i = 0; i < flat.positions.length; i += 3)
+        for (let k = 0; k < 3; k++) {
+          if (flat.positions[i + k] < bmin[k]) bmin[k] = flat.positions[i + k];
+          if (flat.positions[i + k] > bmax[k]) bmax[k] = flat.positions[i + k];
+        }
+      const g = p.g;
+      meshes.push({ id: `m${gi++}`, layer: g.layer, color: g.color, ...(g.material ? { material: g.material } : {}), positions: flat.positions, normals: flat.normals, indices: flat.indices, triangleCount: flat.indices.length / 3 });
+      const li = layerMap.get(g.layer) ?? { name: g.layer, color: g.color, triangleCount: 0 };
+      li.triangleCount += flat.indices.length / 3;
+      layerMap.set(g.layer, li);
+    }
+    warnings.push({ code: "large-model", message: `Sehr großes Modell: Feine Details (z. B. Möbel) wurden beim Einlesen vereinfacht, damit es flüssig bleibt. Wände, Böden und Dächer bleiben exakt.` });
+  }
   for (const g of groups) {
+    if (g.tris.length === 0 && !g.weld) continue;
     progress(0.6 + (0.35 * gi) / Math.max(1, groups.length), "Modell wird optimiert");
     // DXF (x, y, z) Z-up → (x, z, -y) Y-up, scaled to metres, minus origin.
     const tri = g.tris;
@@ -302,6 +355,26 @@ export function finalize(
     warnings,
     ok,
   };
+}
+
+/** Indexed triangles → one vertex per corner with the face normal (large models: no welding/crease work). */
+function flatten(P: Float32Array, I: Uint32Array | Uint16Array) {
+  const n = I.length / 3;
+  const positions = new Float32Array(n * 9), normals = new Float32Array(n * 9), indices = new Uint32Array(n * 3);
+  for (let t = 0; t < n; t++) {
+    const a = I[t * 3] * 3, b = I[t * 3 + 1] * 3, c = I[t * 3 + 2] * 3;
+    const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+    const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    for (let k = 0; k < 3; k++) {
+      const src = k === 0 ? a : k === 1 ? b : c, o = t * 9 + k * 3;
+      positions[o] = P[src]; positions[o + 1] = P[src + 1]; positions[o + 2] = P[src + 2];
+      normals[o] = nx; normals[o + 1] = ny; normals[o + 2] = nz;
+      indices[t * 3 + k] = t * 3 + k;
+    }
+  }
+  return { positions, normals, indices };
 }
 
 function fmtLen(m: number) {

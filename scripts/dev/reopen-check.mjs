@@ -1,0 +1,23 @@
+// App check: open a model, go home, reopen it from the recent list (source stored as Blob). args: dist model
+import { chromium } from "playwright"; import http from "node:http"; import { readFile } from "node:fs/promises"; import path from "node:path";
+const [dist, model] = process.argv.slice(2);
+const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".webp": "image/webp" };
+const srv = http.createServer(async (q, r) => { let f = decodeURIComponent(q.url.split("?")[0]); if (f === "/") f = "/index.html"; try { const b = await readFile(path.join(dist, f)); r.writeHead(200, { "content-type": types[path.extname(f)] ?? "application/octet-stream" }); r.end(b); } catch { r.writeHead(404); r.end(); } }).listen(0);
+const b = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+await p.addInitScript(() => { localStorage.setItem("av-auto", "0"); sessionStorage.setItem("av-gpu-hint", "off"); });
+await p.goto(`http://localhost:${srv.address().port}/`);
+await p.getByTestId("file").setInputFiles(model);
+await p.getByTestId("viewer").waitFor({ timeout: 600000 });
+const tris = () => p.evaluate(() => { let n = 0; window.__archvistaViewer.building.traverse((o) => { if (o.isMesh) n += o.geometry.index.count / 3; }); return n; });
+await p.waitForTimeout(3000);
+const t1 = await tris();
+await p.goto(`http://localhost:${srv.address().port}/`);
+await p.waitForTimeout(1500);
+await p.locator(".card").first().click();
+const ok = await p.getByTestId("viewer").waitFor({ timeout: 600000 }).then(() => true).catch(() => false);
+await p.waitForTimeout(3000);
+const t2 = ok ? await tris() : -1;
+console.log(path.basename(model), "first", t1, "reopened", t2, t1 === t2 ? "✓ same" : "✗ differs", "errors:", errs.join(" | ") || "none");
+await b.close(); srv.close();

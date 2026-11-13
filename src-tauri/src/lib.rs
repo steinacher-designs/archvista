@@ -88,7 +88,36 @@ fn project_save_source(app: AppHandle, request: Request) -> Result<(), String> {
     let id = header(&request, "x-id")?;
     let dir = projects_dir(&app)?.join(safe_id(&id)?);
     fs::create_dir_all(&dir).map_err(err)?;
-    fs::write(dir.join("source.dxf"), body(&request)?).map_err(err)
+    // large files arrive in pieces: "x-offset: 0" starts the file, every further piece is appended
+    match request.headers().get("x-offset").and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<u64>().ok()) {
+        Some(0) | None => fs::write(dir.join("source.dxf"), body(&request)?).map_err(err),
+        Some(_) => {
+            let mut f = fs::OpenOptions::new().append(true).open(dir.join("source.dxf")).map_err(err)?;
+            f.write_all(body(&request)?).map_err(err)
+        }
+    }
+}
+
+#[tauri::command]
+fn project_source_size(app: AppHandle, id: String) -> Result<u64, String> {
+    let p = projects_dir(&app)?.join(safe_id(&id)?).join("source.dxf");
+    Ok(fs::metadata(p).map_err(err)?.len())
+}
+
+/// One piece of a stored source file (large files are read piece by piece, never as a whole).
+fn read_chunk(p: &Path, offset: u64, len: u64) -> Result<Vec<u8>, String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = fs::File::open(p).map_err(err)?;
+    f.seek(SeekFrom::Start(offset)).map_err(err)?;
+    let mut buf = Vec::with_capacity(len as usize);
+    f.take(len).read_to_end(&mut buf).map_err(err)?;
+    Ok(buf)
+}
+
+#[tauri::command]
+fn project_load_source_chunk(app: AppHandle, id: String, offset: u64, len: u64) -> Result<tauri::ipc::Response, String> {
+    let p = projects_dir(&app)?.join(safe_id(&id)?).join("source.dxf");
+    Ok(tauri::ipc::Response::new(read_chunk(&p, offset, len)?))
 }
 
 #[tauri::command]
@@ -231,15 +260,26 @@ fn secret_delete(key: String) -> Result<(), String> {
 #[derive(Serialize)]
 struct StartupFile {
     name: String,
-    bytes: Vec<u8>,
+    size: u64,
+}
+
+fn startup_path() -> Option<PathBuf> {
+    let path = std::env::args().skip(1).find(|a| { let l = a.to_lowercase(); l.ends_with(".dxf") || l.ends_with(".skp") || l.ends_with(".3ds") || l.ends_with(".glb") || l.ends_with(".gltf") })?;
+    Some(PathBuf::from(&path))
+}
+
+/// The file passed by the operating system (double-click): name and size; the content is read in pieces.
+#[tauri::command]
+fn startup_file() -> Option<StartupFile> {
+    let p = startup_path()?;
+    let size = fs::metadata(&p).ok()?.len();
+    Some(StartupFile { name: p.file_name()?.to_string_lossy().to_string(), size })
 }
 
 #[tauri::command]
-fn startup_file() -> Option<StartupFile> {
-    let path = std::env::args().skip(1).find(|a| { let l = a.to_lowercase(); l.ends_with(".dxf") || l.ends_with(".skp") || l.ends_with(".3ds") || l.ends_with(".glb") || l.ends_with(".gltf") })?;
-    let p = PathBuf::from(&path);
-    let bytes = fs::read(&p).ok()?;
-    Some(StartupFile { name: p.file_name()?.to_string_lossy().to_string(), bytes })
+fn startup_file_chunk(offset: u64, len: u64) -> Result<tauri::ipc::Response, String> {
+    let p = startup_path().ok_or("no startup file")?;
+    Ok(tauri::ipc::Response::new(read_chunk(&p, offset, len)?))
 }
 
 // ——— benchmarks ———
@@ -278,6 +318,9 @@ pub fn run() {
             project_list,
             project_load,
             project_load_source,
+            project_source_size,
+            project_load_source_chunk,
+            startup_file_chunk,
             project_delete,
             write_site_file,
             preview_clear,

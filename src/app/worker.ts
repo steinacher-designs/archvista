@@ -5,7 +5,7 @@ import { importSkp } from "../core/skp/import";
 import { importTds } from "../core/tds/import";
 import { importGltf } from "../core/gltf/import";
 
-export type WorkerIn = { type: "process"; dxf: ArrayBuffer; unitsToMeters?: number; format?: "dxf" | "skp" | "3ds" | "gltf"; /** files next to a .gltf (from a ZIP) */ files?: { name: string; data: Uint8Array }[] };
+export type WorkerIn = { type: "process"; source: Blob; unitsToMeters?: number; format?: "dxf" | "skp" | "3ds" | "gltf"; /** files next to a .gltf (from a ZIP) */ files?: { name: string; data: Uint8Array }[] };
 export type WorkerOut =
   | { type: "progress"; fraction: number; label: string }
   | { type: "done"; model: ReturnType<typeof strip>; scene: ReturnType<typeof prepareScene>; timings: Record<string, number>; images?: { name: string; data: Uint8Array }[] }
@@ -23,16 +23,21 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
     const onProgress = (f: number, label: string) => post({ type: "progress", fraction: f * 0.55, label });
     let images: { name: string; data: Uint8Array }[] | undefined;
     let model: ReturnType<typeof importDxf>;
+    // the file is read here, in the background: whole for compact formats, piece by piece for DXF
+    const reader = new FileReaderSync();
+    const blob = e.data.source;
+    const whole = () => new Uint8Array(reader.readAsArrayBuffer(blob));
     if (e.data.format === "skp") {
-      const r = importSkp(new Uint8Array(e.data.dxf), { unitsToMeters: e.data.unitsToMeters, onProgress });
+      const r = importSkp(whole(), { unitsToMeters: e.data.unitsToMeters, onProgress });
       model = r.model; images = r.images;
     } else if (e.data.format === "gltf") {
-      const r = importGltf(new Uint8Array(e.data.dxf), { unitsToMeters: e.data.unitsToMeters, onProgress }, e.data.files);
+      const r = importGltf(whole(), { unitsToMeters: e.data.unitsToMeters, onProgress }, e.data.files);
       model = r.model; images = r.images;
     } else if (e.data.format === "3ds") {
-      model = importTds(new Uint8Array(e.data.dxf), { unitsToMeters: e.data.unitsToMeters, onProgress });
+      model = importTds(whole(), { unitsToMeters: e.data.unitsToMeters, onProgress });
     } else {
-      model = importDxf(new TextDecoder("utf-8").decode(e.data.dxf), { unitsToMeters: e.data.unitsToMeters, onProgress });
+      const src = { size: blob.size, read: (o: number, l: number) => new Uint8Array(reader.readAsArrayBuffer(blob.slice(o, Math.min(blob.size, o + l)))) };
+      model = importDxf(src, { unitsToMeters: e.data.unitsToMeters, onProgress });
     }
     const t1 = performance.now();
     if (!model.ok) { post({ type: "done", model: strip(model), scene: null as never, timings: { import: t1 - t0 } }); return; }

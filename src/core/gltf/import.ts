@@ -4,6 +4,8 @@
 
 import type { CadMaterial, ImportedModel, ImportOptions, ImportWarning, LayerInfo, ModelMesh } from "../dxf/import";
 import { textureKey } from "../materials";
+import { GrowF32, GrowU32, LARGE_MODEL_TRIANGLES, IMPORT_BUDGET } from "../weld";
+import { clusterPart, simplifyToBudget, surfaceArea } from "../simplify";
 
 export class GltfFormatError extends Error {}
 
@@ -41,6 +43,18 @@ function normalMat(m: M4): { n: number[]; flip: boolean } {
   return { n, flip: det < 0 };
 }
 const lin2srgb = (v: number) => Math.round(255 * Math.max(0, Math.min(1, v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)));
+
+/** Vertex normals from the faces around each vertex (files without normals, large-model path). */
+function smoothNormals(P: Float32Array, I: Uint32Array, out: Float32Array) {
+  for (let t = 0; t < I.length; t += 3) {
+    const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+    const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+    const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    for (const v of [a, b, c]) { out[v] += nx; out[v + 1] += ny; out[v + 2] += nz; }
+  }
+  for (let i = 0; i < out.length; i += 3) { const l = Math.hypot(out[i], out[i + 1], out[i + 2]) || 1; out[i] /= l; out[i + 1] /= l; out[i + 2] /= l; }
+}
 
 export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resources: { name: string; data: Uint8Array }[] = []): GltfImport {
   const progress = opts.onProgress ?? (() => {});
@@ -171,13 +185,75 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
     return info;
   };
 
+  const warnings: ImportWarning[] = [];
   // ——— geometry: walk the node tree of the default scene ———
   const s = opts.unitsToMeters ?? 1; // glTF is in metres; a factor only when the user corrects units
-  type Acc = { layer: string; material?: string; color: number; textured: boolean; pos: number[]; nrm: number[]; uv: number[]; idx: number[] };
+  type Acc = { layer: string; material?: string; color: number; textured: boolean; pos: GrowF32; nrm: GrowF32; uv: GrowF32; idx: GrowU32 };
   const groups = new Map<string, Acc>();
   let prims = 0, skipped = 0;
   const sceneIdx = json.scene ?? 0;
   const roots: number[] = json.scenes?.[sceneIdx]?.nodes ?? (json.nodes ?? []).map((_: J, i: number) => i);
+
+  // how many triangles the scene really has (a part placed 16 times counts 16 times)
+  const primTris = (p: J) => {
+    const n = p.indices !== undefined ? json.accessors[p.indices].count : json.accessors[p.attributes?.POSITION]?.count ?? 0;
+    return (p.mode ?? 4) === 4 ? n / 3 : Math.max(0, n - 2);
+  };
+  let worldTris = 0;
+  const count = (ni: number, depth: number) => {
+    const node = json.nodes?.[ni];
+    if (!node || depth > 64) return;
+    if (node.mesh !== undefined) for (const p of json.meshes[node.mesh]?.primitives ?? []) worldTris += (p.mode ?? 4) >= 4 ? primTris(p) : 0;
+    for (const c of node.children ?? []) count(c, depth + 1);
+  };
+  for (const r of roots) count(r, 0);
+  // very large scenes: every part is thinned once (fine details only) and the result reused for each placement
+  const BUDGET = opts.large?.budget ?? IMPORT_BUDGET;
+  const large = worldTris > (opts.large?.threshold ?? LARGE_MODEL_TRIANGLES);
+  let keep = large ? BUDGET / worldTris : 1;
+  type Prim = { P: ArrayLike<number>; N: ArrayLike<number> | null; T: ArrayLike<number> | null; I: ArrayLike<number>; vc: number };
+  const cache = new Map<string, Prim>();
+  const readPrim = (p: J, textured: boolean): Prim => {
+    const P = accessor(p.attributes.POSITION);
+    const N = p.attributes.NORMAL !== undefined ? accessor(p.attributes.NORMAL) : null;
+    const T = textured && p.attributes.TEXCOORD_0 !== undefined ? accessor(p.attributes.TEXCOORD_0) : null;
+    const vc = P.length / 3;
+    const mode = p.mode ?? 4;
+    let I: ArrayLike<number> = p.indices !== undefined ? accessor(p.indices) : Uint32Array.from({ length: vc }, (_, i) => i);
+    if (mode === 5 || mode === 6) {
+      const t = new GrowU32(Math.max(3, (I.length - 2) * 3));
+      for (let i = 2; i < I.length; i++) {
+        if (mode === 5) { if (i % 2) { t.push(I[i - 1]); t.push(I[i - 2]); t.push(I[i]); } else { t.push(I[i - 2]); t.push(I[i - 1]); t.push(I[i]); } }
+        else { t.push(I[0]); t.push(I[i - 1]); t.push(I[i]); }
+      }
+      I = t.take();
+    }
+    return { P, N, T, I, vc };
+  };
+  const prim = (mi: number, pi: number, p: J, textured: boolean, w: M4): Prim => {
+    if (!large) return readPrim(p, textured);
+    const key = `${mi}/${pi}`;
+    let c = cache.get(key);
+    if (c) return c;
+    const r = readPrim(p, textured);
+    const nI = r.I.length - (r.I.length % 3);
+    const indices = new Uint32Array(nI);
+    for (let i = 0; i < nI; i++) indices[i] = r.I[i] < r.vc ? r.I[i] : 0;
+    const part = { positions: Float32Array.from(r.P), normals: r.N ? Float32Array.from(r.N) : new Float32Array(r.P.length), uvs: r.T ? Float32Array.from(r.T) : new Float32Array(r.vc * 2), indices };
+    if (!r.N) smoothNormals(part.positions, indices, part.normals);
+    // sizes in metres: parts are often stored in mm and scaled where they are placed (the first placement counts)
+    const sc = Math.cbrt(Math.abs(w[0] * (w[5] * w[10] - w[9] * w[6]) - w[4] * (w[1] * w[10] - w[9] * w[2]) + w[8] * (w[1] * w[6] - w[5] * w[2]))) * s || 1;
+    const tris = nI / 3, a = surfaceArea(part) * sc * sc;
+    let out = part;
+    if (tris > 300 && tris / Math.max(a, 1e-6) > 40) {
+      const cell = Math.min(0.15, Math.max(0.005, Math.sqrt((2 * a) / Math.max(1, tris * keep))));
+      out = clusterPart(part, cell / sc);
+    }
+    c = { P: out.positions, N: out.normals, T: r.T ? out.uvs : null, I: out.indices, vc: out.positions.length / 3 };
+    cache.set(key, c);
+    return c;
+  };
+
   const visit = (ni: number, parent: M4, layer: string, depth: number) => {
     const node = json.nodes?.[ni];
     if (!node || depth > 64) return;
@@ -186,38 +262,41 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
     const name = String(node.name ?? "").trim();
     // the outermost named group gives the "layer" (like a tag), so ARCHVISTA can tell walls, roof, furniture …
     const lay = layer || name;
-    if (node.mesh !== undefined) addMesh(json.meshes[node.mesh], world, lay || String(json.meshes[node.mesh]?.name ?? "").trim() || "Modell");
+    if (node.mesh !== undefined) addMesh(node.mesh, world, lay || String(json.meshes[node.mesh]?.name ?? "").trim() || "Modell");
     for (const c of node.children ?? []) visit(c, world, depth === 0 && !name ? "" : lay, depth + 1);
   };
-  const addMesh = (mesh: J, w: M4, layer: string) => {
+  let placed = 0;
+  // large scenes, first pass: only count how much room each group needs (no spare capacity later)
+  let counting = false;
+  const need = new Map<string, { v: number; i: number }>();
+  const addMesh = (mi: number, w: M4, layer: string) => {
+    const mesh = json.meshes[mi];
     const { n: nm, flip } = normalMat(w);
-    for (const p of mesh?.primitives ?? []) {
+    (mesh?.primitives ?? []).forEach((p: J, pi: number) => {
       const mode = p.mode ?? 4;
-      if (mode < 4 || p.attributes?.POSITION === undefined) { skipped++; continue; }
-      prims++;
-      const P = accessor(p.attributes.POSITION);
-      const N = p.attributes.NORMAL !== undefined ? accessor(p.attributes.NORMAL) : null;
+      if (mode < 4 || p.attributes?.POSITION === undefined) { if (!counting) skipped++; return; }
       const info = material(p.material);
-      const T = info.textured && p.attributes.TEXCOORD_0 !== undefined ? accessor(p.attributes.TEXCOORD_0) : null;
-      const vc = P.length / 3;
-      let I: ArrayLike<number> = p.indices !== undefined ? accessor(p.indices) : Array.from({ length: vc }, (_, i) => i);
-      if (mode === 5 || mode === 6) {
-        const t: number[] = [];
-        for (let i = 2; i < I.length; i++) {
-          if (mode === 5) { if (i % 2) t.push(I[i - 1], I[i - 2], I[i]); else t.push(I[i - 2], I[i - 1], I[i]); }
-          else t.push(I[0], I[i - 1], I[i]);
-        }
-        I = t;
-      }
+      const { P, N, T, I, vc } = prim(mi, pi, p, info.textured, w);
       const key = `${layer}\u0000${info.name ?? ""}\u0000${info.color}`;
+      if (counting) {
+        const c = need.get(key) ?? { v: 0, i: 0 };
+        c.v += N ? vc : I.length; c.i += I.length;
+        need.set(key, c);
+        return;
+      }
+      prims++;
+      if (++placed % 500 === 0) progress(0.1 + 0.45 * Math.min(1, placed / Math.max(1, json.nodes.length)), "Objekte werden gelesen");
       let g = groups.get(key);
-      if (!g) groups.set(key, (g = { layer, material: info.name, color: info.color, textured: info.textured, pos: [], nrm: [], uv: [], idx: [] }));
+      if (!g) {
+        const c = need.get(key);
+        groups.set(key, (g = { layer, material: info.name, color: info.color, textured: info.textured, pos: new GrowF32(c ? c.v * 3 : 1024), nrm: new GrowF32(c ? c.v * 3 : 1024), uv: new GrowF32(c ? c.v * 2 : 1024), idx: new GrowU32(c ? c.i : 1024) }));
+      }
       if (info.textured && !g.textured) g.textured = true;
       // glTF is Y-up in metres – the same convention as ARCHVISTA's model data (and the SketchUp import)
       const put = (vi: number, fn?: [number, number, number]) => {
         const x = P[vi * 3], y = P[vi * 3 + 1], z = P[vi * 3 + 2];
         const wx = w[0] * x + w[4] * y + w[8] * z + w[12], wy = w[1] * x + w[5] * y + w[9] * z + w[13], wz = w[2] * x + w[6] * y + w[10] * z + w[14];
-        g!.pos.push(wx * s, wy * s, wz * s);
+        g!.pos.push(wx * s); g!.pos.push(wy * s); g!.pos.push(wz * s);
         let nx: number, ny: number, nz: number;
         if (fn) [nx, ny, nz] = fn;
         else {
@@ -226,16 +305,17 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
           // cofactors = det · inverse transpose: a mirroring transform would turn normals inside out
           const l = (Math.hypot(nx, ny, nz) || 1) * (flip ? -1 : 1); nx /= l; ny /= l; nz /= l;
         }
-        g!.nrm.push(nx, ny, nz);
-        g!.uv.push(T ? T[vi * 2] : 0, T ? T[vi * 2 + 1] : 0);
+        g!.nrm.push(nx); g!.nrm.push(ny); g!.nrm.push(nz);
+        g!.uv.push(T ? T[vi * 2] : 0); g!.uv.push(T ? T[vi * 2 + 1] : 0);
       };
       if (N) {
-        const base = g.pos.length / 3;
+        const base = g.pos.n / 3;
+        g.pos.reserve(vc * 3); g.nrm.reserve(vc * 3); g.uv.reserve(vc * 2); g.idx.reserve(I.length);
         for (let v = 0; v < vc; v++) put(v);
         for (let i = 0; i + 2 < I.length; i += 3) {
           const a = I[i], b = I[i + 1], c = I[i + 2];
           if (a >= vc || b >= vc || c >= vc) continue;
-          if (flip) g.idx.push(base + a, base + c, base + b); else g.idx.push(base + a, base + b, base + c);
+          if (flip) { g.idx.push(base + a); g.idx.push(base + c); g.idx.push(base + b); } else { g.idx.push(base + a); g.idx.push(base + b); g.idx.push(base + c); }
         }
       } else {
         // no normals in the file: flat per triangle
@@ -249,35 +329,55 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
           // cofactor matrix · face normal = normal of the transformed triangle (winding already swapped when mirrored)
           const tx = nm[0] * fx + nm[3] * fy + nm[6] * fz, ty = nm[1] * fx + nm[4] * fy + nm[7] * fz, tz = nm[2] * fx + nm[5] * fy + nm[8] * fz;
           const l = Math.hypot(tx, ty, tz) || 1; fx = tx / l; fy = ty / l; fz = tz / l;
-          const base = g.pos.length / 3;
+          const base = g.pos.n / 3;
           put(a, [fx, fy, fz]); put(b, [fx, fy, fz]); put(c, [fx, fy, fz]);
-          g.idx.push(base, base + 1, base + 2);
+          g.idx.push(base); g.idx.push(base + 1); g.idx.push(base + 2);
         }
       }
-    }
+    });
   };
+  if (large) {
+    counting = true;
+    for (const r of roots) visit(r, ident(), "", 0);
+    // parts that could not be thinned enough add up: sharpen once before filling
+    const total = [...need.values()].reduce((n, c) => n + c.i / 3, 0);
+    if (total > BUDGET * 1.5) {
+      keep *= BUDGET / total;
+      cache.clear(); need.clear();
+      for (const r of roots) visit(r, ident(), "", 0);
+    }
+    counting = false;
+    progress(0.35, "Objekte werden gelesen");
+  }
   for (const r of roots) visit(r, ident(), "", 0);
   progress(0.6, "Modell wird optimiert");
 
   // origin: centre of footprint, lowest point (like the other imports)
   const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
-  for (const g of groups.values()) for (let i = 0; i < g.pos.length; i += 3) for (let k = 0; k < 3; k++) {
-    const v = g.pos[i + k]; if (v < mn[k]) mn[k] = v; if (v > mx[k]) mx[k] = v;
-  }
+  for (const g of groups.values()) { const A = g.pos.a; for (let i = 0; i < g.pos.n; i += 3) for (let k = 0; k < 3; k++) {
+    const v = A[i + k]; if (v < mn[k]) mn[k] = v; if (v > mx[k]) mx[k] = v;
+  } }
   const ok = Number.isFinite(mn[0]);
   const meshes: ModelMesh[] = [];
   const layerMap = new Map<string, LayerInfo>();
   const origin: [number, number, number] = ok ? [(mn[0] + mx[0]) / 2, mn[1], (mn[2] + mx[2]) / 2] : [0, 0, 0];
   let gi = 0, triangles = 0, vertices = 0;
-  for (const g of groups.values()) {
-    if (!g.idx.length) continue;
-    const positions = new Float32Array(g.pos.length), normals = Float32Array.from(g.nrm);
-    for (let i = 0; i < g.pos.length; i += 3) for (let k = 0; k < 3; k++) positions[i + k] = g.pos[i + k] - origin[k];
-    const indices = Uint32Array.from(g.idx);
+  // large scenes: parts placed many times can still add up – thin fine details down to the budget
+  let list = [...groups.values()].filter((g) => g.idx.n).map((g) => {
+    // (no copies: a large scene would briefly need twice the memory)
+    const positions = g.pos.a.subarray(0, g.pos.n); for (let i = 0; i < positions.length; i += 3) for (let k = 0; k < 3; k++) positions[i + k] -= origin[k];
+    const r = { g, positions, normals: g.nrm.a.subarray(0, g.nrm.n), uvs: g.uv.a.subarray(0, g.uv.n), indices: g.idx.a.subarray(0, g.idx.n) };
+    g.pos = g.nrm = g.uv = new GrowF32(1); g.idx = new GrowU32(1);
+    return r;
+  });
+  if (large) list = simplifyToBudget(list, BUDGET).parts;
+  if (large) warnings.push({ code: "large-model", message: "Sehr großes Modell: Feine Details (z. B. Möbel) wurden beim Einlesen vereinfacht, damit es flüssig bleibt. Wände, Böden und Dächer bleiben exakt." });
+  for (const { g, positions, normals, uvs, indices } of list) {
+    if (!indices.length) continue;
     meshes.push({
       id: `m${gi++}`, layer: g.layer, color: g.color, ...(g.material ? { material: g.material } : {}),
-      positions, normals, indices, triangleCount: indices.length / 3,
-      ...(g.textured ? { uvs: Float32Array.from(g.uv) } : {}),
+      positions, normals, indices: indices instanceof Uint32Array ? indices : Uint32Array.from(indices), triangleCount: indices.length / 3,
+      ...(g.textured ? { uvs } : {}),
     });
     triangles += indices.length / 3; vertices += positions.length / 3;
     const li = layerMap.get(g.layer) ?? { name: g.layer, color: g.color, triangleCount: 0 };
@@ -287,7 +387,6 @@ export function importGltf(bytes: Uint8Array, opts: ImportOptions = {}, resource
   const size = ok ? [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]] : [0, 0, 0];
   const rawExtent = Math.max(...size) / s;
   const plausible = rawExtent * s >= 2 && rawExtent * s <= 2000;
-  const warnings: ImportWarning[] = [];
   if (!ok) warnings.push({ code: "no-3d", message: "In der glTF/GLB-Datei wurden keine Flächen gefunden." });
   else if (!plausible) warnings.push({ code: "units-implausible", message: `Das Modell ist ${(rawExtent * s).toFixed(1)} m groß – ungewöhnlich für ein Gebäude. Bei Bedarf die Einheit korrigieren.` });
   if (skipped) warnings.push({ code: "gltf-lines", message: `${skipped} Linien-/Punkt-Teil(e) ohne Flächen wurden weggelassen.` });
